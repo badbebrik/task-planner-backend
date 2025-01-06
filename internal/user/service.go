@@ -2,6 +2,7 @@ package user
 
 import (
 	"errors"
+	"task-planner/pkg/security"
 )
 
 type Service struct {
@@ -12,7 +13,7 @@ func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) CreateUser(email, passwordHash, name string) error {
+func (s *Service) CreateUser(email, password, name string) error {
 	exists, err := s.repo.UserExists(email)
 	if err != nil {
 		return err
@@ -20,10 +21,13 @@ func (s *Service) CreateUser(email, passwordHash, name string) error {
 	if exists {
 		return errors.New("user already exists")
 	}
-
+	hashedPassword, err := security.HashPassword(password)
+	if err != nil {
+		return err
+	}
 	user := &User{
 		Email:           email,
-		PasswordHash:    passwordHash,
+		PasswordHash:    hashedPassword,
 		Name:            name,
 		IsEmailVerified: false,
 	}
