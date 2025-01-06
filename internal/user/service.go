@@ -1,7 +1,6 @@
 package user
 
 import (
-	"errors"
 	"task-planner/pkg/security"
 )
 
@@ -19,7 +18,7 @@ func (s *Service) CreateUser(email, password, name string) error {
 		return err
 	}
 	if exists {
-		return errors.New("user already exists")
+		return ErrUserAlreadyExists
 	}
 	hashedPassword, err := security.HashPassword(password)
 	if err != nil {
