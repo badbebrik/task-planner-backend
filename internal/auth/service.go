@@ -2,9 +2,11 @@ package auth
 
 import (
 	"errors"
+	"math/rand"
 	"task-planner/internal/email"
 	"task-planner/internal/user"
 	"task-planner/pkg/security"
+	"time"
 )
 
 var (
@@ -46,4 +48,14 @@ func (s *Service) RegisterEmail(email, password, name string) error {
 	}
 
 	return nil
+}
+
+func GenerateVerificationCode() string {
+	rand.NewSource(time.Now().UnixNano())
+	letters := "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	code := make([]byte, 6)
+	for i := range code {
+		code[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(code)
 }
