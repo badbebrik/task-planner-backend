@@ -3,6 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"task-planner/internal/auth"
+	"task-planner/internal/email"
 	"task-planner/internal/user"
 	"task-planner/migration"
 	"task-planner/pkg/config"
@@ -18,14 +21,24 @@ func main() {
 	}
 
 	userRepo := user.NewPGRepository(db)
-	service := user.NewService(userRepo)
+	userService := user.NewService(userRepo)
 
-	err := service.CreateUser("example@example.com", "hashed_password", "John Doe")
+	emailService := email.NewSMTPEmailService(
+		"smtp.gmail.com",
+		"587",
+		os.Getenv("EMAIL_USERNAME"),
+		os.Getenv("EMAIL_PASSWORD"),
+		"no-reply@whatamitodo.com",
+	)
+	authService := auth.NewService(userService, emailService)
+	authHandler := auth.NewHandler(authService)
+
+	err := emailService.SendVerificationEmail("viktoria.serikova2016@yandex.ru", "123456")
 	if err != nil {
-		log.Fatalf("Error creating user: %v", err)
+		log.Fatalf("Failed to send email: %v", err)
 	}
 
-	log.Println("User created successfully")
+	http.HandleFunc("/register/email", authHandler.RegisterEmail)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write([]byte("App is running"))

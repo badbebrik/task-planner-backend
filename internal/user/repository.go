@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type Repository interface {
+type UserRepository interface {
 	UserExists(email string) (bool, error)
 	CreateUser(user *User) error
 }

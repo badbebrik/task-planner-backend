@@ -1,37 +1,35 @@
 package user
 
-import (
-	"task-planner/pkg/security"
-)
-
-type Service struct {
-	repo Repository
+type UserService interface {
+	CreateUser(email, passwordHash, name string) error
+	UserExists(email string) (bool, error)
 }
 
-func NewService(repo Repository) *Service {
+type Service struct {
+	repo UserRepository
+}
+
+func NewService(repo UserRepository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) CreateUser(email, password, name string) error {
-	exists, err := s.repo.UserExists(email)
+func (s *Service) CreateUser(email, passwordHash, name string) error {
+	exists, err := s.UserExists(email)
 	if err != nil {
 		return err
 	}
 	if exists {
 		return ErrUserAlreadyExists
 	}
-	hashedPassword, err := security.HashPassword(password)
-	if err != nil {
-		return err
-	}
+
 	user := &User{
-		Email:           email,
-		PasswordHash:    hashedPassword,
-		Name:            name,
-		IsEmailVerified: false,
+		Email:        email,
+		PasswordHash: passwordHash,
+		Name:         name,
 	}
-	if err := s.repo.CreateUser(user); err != nil {
-		return err
-	}
-	return nil
+	return s.repo.CreateUser(user)
+}
+
+func (s *Service) UserExists(email string) (bool, error) {
+	return s.repo.UserExists(email)
 }
