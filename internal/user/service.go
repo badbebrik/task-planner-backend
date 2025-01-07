@@ -3,6 +3,8 @@ package user
 type UserService interface {
 	CreateUser(email, passwordHash, name string) (int, error)
 	UserExists(email string) (bool, error)
+	GetUserByEmail(email string) (*User, error)
+	MarkEmailAsVerified(id int64) error
 }
 
 type Service struct {
@@ -38,4 +40,12 @@ func (s *Service) CreateUser(email, passwordHash, name string) (int, error) {
 
 func (s *Service) UserExists(email string) (bool, error) {
 	return s.repo.UserExists(email)
+}
+
+func (s *Service) GetUserByEmail(email string) (*User, error) {
+	return s.repo.GetUserByEmail(email)
+}
+
+func (s *Service) MarkEmailAsVerified(id int64) error {
+	return s.repo.MarkEmailAsVerified(id)
 }

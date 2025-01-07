@@ -36,6 +36,7 @@ func main() {
 	authHandler := auth.NewHandler(authService)
 
 	http.HandleFunc("/register/email", authHandler.RegisterEmail)
+	http.HandleFunc("/register/email/verify", authHandler.VerifyEmail)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write([]byte("App is running"))

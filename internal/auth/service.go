@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"task-planner/internal/email"
 	"task-planner/internal/user"
@@ -68,4 +69,44 @@ func GenerateVerificationCode() string {
 		code[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(code)
+}
+
+func (s *Service) VerifyEmail(email, code string) error {
+	user, err := s.userService.GetUserByEmail(email)
+	if err != nil {
+		return err
+	}
+
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	verificationCode, err := s.emailRepo.GetVerificationCode(user.ID)
+	if err != nil {
+		return err
+	}
+
+	if verificationCode == nil {
+		return fmt.Errorf("Verification code not found")
+	}
+
+	if time.Now().After(verificationCode.ExpiresAt) {
+		return fmt.Errorf("Verification code expired")
+	}
+
+	if verificationCode.Code != code {
+		return fmt.Errorf("Invalid verification code")
+	}
+
+	err = s.userService.MarkEmailAsVerified(user.ID)
+	if err != nil {
+		return err
+	}
+
+	err = s.emailRepo.DeleteVerificationCode(user.ID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

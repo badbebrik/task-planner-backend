@@ -10,6 +10,7 @@ type UserRepository interface {
 	CreateUser(user *User) (int, error)
 	UserExists(email string) (bool, error)
 	GetUserByEmail(email string) (*User, error)
+	MarkEmailAsVerified(userID int64) error
 }
 
 type PGRepository struct {
@@ -71,4 +72,17 @@ func (r *PGRepository) GetUserByEmail(email string) (*User, error) {
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
 	return user, nil
+}
+
+func (r *PGRepository) MarkEmailAsVerified(userID int64) error {
+	query := `
+		UPDATE users
+		SET is_email_verified = TRUE, updated_at = NOW()
+		WHERE id = $1
+	`
+	_, err := r.db.Exec(query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to mark email as verified: %w", err)
+	}
+	return nil
 }
