@@ -30,13 +30,10 @@ func main() {
 		os.Getenv("EMAIL_PASSWORD"),
 		"no-reply@whatamitodo.com",
 	)
-	authService := auth.NewService(userService, emailService)
-	authHandler := auth.NewHandler(authService)
+	emailRepo := email.NewEmailRepository(db)
 
-	err := emailService.SendVerificationEmail("viktoria.serikova2016@yandex.ru", "123456")
-	if err != nil {
-		log.Fatalf("Failed to send email: %v", err)
-	}
+	authService := auth.NewService(userService, emailService, emailRepo)
+	authHandler := auth.NewHandler(authService)
 
 	http.HandleFunc("/register/email", authHandler.RegisterEmail)
 

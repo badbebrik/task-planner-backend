@@ -7,8 +7,9 @@ import (
 )
 
 type UserRepository interface {
+	CreateUser(user *User) (int, error)
 	UserExists(email string) (bool, error)
-	CreateUser(user *User) error
+	GetUserByEmail(email string) (*User, error)
 }
 
 type PGRepository struct {
@@ -29,12 +30,14 @@ func (r *PGRepository) UserExists(email string) (bool, error) {
 	return exists, nil
 }
 
-func (r *PGRepository) CreateUser(user *User) error {
+func (r *PGRepository) CreateUser(user *User) (int, error) {
 	query := `
 		INSERT INTO users (email, password_hash, name, is_email_verified, google_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id
 	`
-	_, err := r.db.Exec(
+	var userID int
+	err := r.db.QueryRow(
 		query,
 		user.Email,
 		user.PasswordHash,
@@ -43,9 +46,29 @@ func (r *PGRepository) CreateUser(user *User) error {
 		user.GoogleID,
 		time.Now(),
 		time.Now(),
-	)
+	).Scan(&userID)
 	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
+		return 0, fmt.Errorf("failed to create user: %w", err)
 	}
-	return nil
+	return userID, nil
+}
+
+func (r *PGRepository) GetUserByEmail(email string) (*User, error) {
+	query := `
+		SELECT id, email, password_hash, name, is_email_verified, created_at, updated_at
+		FROM users
+		WHERE email = $1
+	`
+	user := &User{}
+	err := r.db.QueryRow(query, email).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.Name,
+		&user.IsEmailVerified, &user.CreatedAt, &user.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by email: %w", err)
+	}
+	return user, nil
 }

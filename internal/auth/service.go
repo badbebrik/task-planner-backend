@@ -16,12 +16,14 @@ var (
 type Service struct {
 	userService user.UserService
 	emailSvc    email.EmailService
+	emailRepo   email.EmailRepository
 }
 
-func NewService(userService user.UserService, emailSvc email.EmailService) *Service {
+func NewService(userService user.UserService, emailSvc email.EmailService, emailRepo email.EmailRepository) *Service {
 	return &Service{
 		userService: userService,
 		emailSvc:    emailSvc,
+		emailRepo:   emailRepo,
 	}
 }
 
@@ -40,12 +42,20 @@ func (s *Service) RegisterEmail(email, password, name string) error {
 		return err
 	}
 
-	if err := s.userService.CreateUser(email, hashedPassword, name); err != nil {
+	userID, err := s.userService.CreateUser(email, hashedPassword, name)
+	if err != nil {
 		return err
 	}
-	if err := s.emailSvc.SendVerificationEmail(email, "123"); err != nil {
+
+	code := GenerateVerificationCode()
+	expiresAt := time.Now().Add(10 * time.Minute)
+
+	err = s.emailRepo.SaveVerificationCode(userID, code, expiresAt)
+	if err != nil {
 		return err
 	}
+
+	s.emailSvc.SendVerificationEmailAsync(email, code)
 
 	return nil
 }

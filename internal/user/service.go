@@ -1,7 +1,7 @@
 package user
 
 type UserService interface {
-	CreateUser(email, passwordHash, name string) error
+	CreateUser(email, passwordHash, name string) (int, error)
 	UserExists(email string) (bool, error)
 }
 
@@ -13,13 +13,13 @@ func NewService(repo UserRepository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) CreateUser(email, passwordHash, name string) error {
+func (s *Service) CreateUser(email, passwordHash, name string) (int, error) {
 	exists, err := s.UserExists(email)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if exists {
-		return ErrUserAlreadyExists
+		return 0, ErrUserAlreadyExists
 	}
 
 	user := &User{
@@ -27,7 +27,13 @@ func (s *Service) CreateUser(email, passwordHash, name string) error {
 		PasswordHash: passwordHash,
 		Name:         name,
 	}
-	return s.repo.CreateUser(user)
+
+	userID, err := s.repo.CreateUser(user)
+	if err != nil {
+		return 0, err
+	}
+
+	return userID, nil
 }
 
 func (s *Service) UserExists(email string) (bool, error) {

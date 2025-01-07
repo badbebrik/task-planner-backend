@@ -8,6 +8,7 @@ import (
 
 type EmailService interface {
 	SendVerificationEmail(email, code string) error
+	SendVerificationEmailAsync(email, code string)
 }
 
 type SMTPEmailService struct {
@@ -39,8 +40,15 @@ func (s *SMTPEmailService) SendVerificationEmailAsync(email, code string) {
 
 func (s *SMTPEmailService) SendVerificationEmail(email, code string) error {
 	auth := smtp.PlainAuth("", s.username, s.password, s.smtpHost)
+	htmlMessage := GenerateVerificationEmail(code)
+
 	message := []byte(fmt.Sprintf(
-		"Subject: Email Verification\n\nYour verification code is %s\n", code,
+		"From: %s\r\n"+
+			"To: %s\r\n"+
+			"Subject: Email Verification\r\n"+
+			"Content-Type: text/html; charset=UTF-8\r\n\r\n"+
+			"%s",
+		s.from, email, htmlMessage,
 	))
 	addr := fmt.Sprintf("%s:%s", s.smtpHost, s.smtpPort)
 
