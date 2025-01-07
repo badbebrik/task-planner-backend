@@ -28,6 +28,15 @@ func NewSMTPEmailService(host, port, username, password, from string) *SMTPEmail
 	}
 }
 
+func (s *SMTPEmailService) SendVerificationEmailAsync(email, code string) {
+	go func() {
+		err := s.SendVerificationEmail(email, code)
+		if err != nil {
+			fmt.Printf("Failed to send verification email to %s: %v\n", email, err)
+		}
+	}()
+}
+
 func (s *SMTPEmailService) SendVerificationEmail(email, code string) error {
 	auth := smtp.PlainAuth("", s.username, s.password, s.smtpHost)
 	message := []byte(fmt.Sprintf(
