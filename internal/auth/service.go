@@ -12,21 +12,26 @@ import (
 )
 
 var (
-	ErrUserAlreadyExists = errors.New("user already exists")
-	ErrUserNotFound      = errors.New("user not found")
+	ErrUserAlreadyExists  = errors.New("user already exists")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrInvalidCredentials = errors.New("invalid email or password")
 )
 
 type Service struct {
 	userService user.Service
 	emailSvc    email.EmailService
 	emailRepo   email.EmailRepository
+	tokenRepo   TokenRepository
+	JWTConfig   JWTConfig
 }
 
-func NewService(u user.Service, e email.EmailService, er email.EmailRepository) *Service {
+func NewService(u user.Service, e email.EmailService, er email.EmailRepository, tr TokenRepository, jwtCft JWTConfig) *Service {
 	return &Service{
 		userService: u,
 		emailSvc:    e,
 		emailRepo:   er,
+		tokenRepo:   tr,
+		JWTConfig:   jwtCft,
 	}
 }
 
@@ -111,4 +116,60 @@ func (s *Service) VerifyEmail(ctx context.Context, email, code string) error {
 	}
 
 	return nil
+}
+
+func (s *Service) Login(ctx context.Context, email, password string) (accessToken, refreshToken string, err error) {
+	usr, err := s.userService.GetUserByEmail(ctx, email)
+	if err != nil {
+		return "", "", err
+	}
+	if usr == nil {
+		return "", "", ErrInvalidCredentials
+	}
+
+	if err := security.ComparePasswords(usr.PasswordHash, password); err != nil {
+		return "", "", ErrInvalidCredentials
+	}
+
+	accessToken, refreshToken, err = GenerateTokenPair(usr.ID, usr.Email, s.JWTConfig)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to save refresh token: %w", err)
+	}
+	return accessToken, refreshToken, nil
+}
+
+func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (newAccess, newRefresh string, err error) {
+	claims, err := ValidateToken(refreshToken, s.JWTConfig.RefreshSecret)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid refresh token: %w", err)
+	}
+
+	existingToken, err := s.tokenRepo.GetRefreshToken(ctx, refreshToken)
+	if err != nil {
+		return "", "", err
+	}
+	if existingToken == nil {
+		return "", "", errors.New("refresh token not found or already revoked")
+	}
+
+	if time.Now().After(existingToken.ExpiresAt) {
+		_ = s.tokenRepo.DeleteRefreshToken(ctx, refreshToken)
+		return "", "", errors.New("refresh token expired")
+	}
+
+	newAccess, newRefresh, err = GenerateTokenPair(claims.UserID, claims.Email, s.JWTConfig)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate new token pair: %w", err)
+	}
+
+	if err := s.tokenRepo.DeleteRefreshToken(ctx, refreshToken); err != nil {
+		return "", "", fmt.Errorf("failed to delete old refresh token: %w", err)
+	}
+
+	refreshExp := time.Now().Add(s.JWTConfig.RefreshTTL)
+	if err := s.tokenRepo.SaveRefreshToken(ctx, claims.UserID, newRefresh, refreshExp); err != nil {
+		return "", "", fmt.Errorf("failed to save new refresh token: %w", err)
+	}
+
+	return newAccess, newRefresh, nil
 }
