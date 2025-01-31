@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"task-planner/internal/auth"
+	"task-planner/internal/db"
 	"task-planner/internal/email"
 	"task-planner/internal/user"
 	"task-planner/migration"
@@ -12,15 +13,21 @@ import (
 )
 
 func main() {
-	cfg := config.LoadConfig()
-	db := config.ConnectDB(cfg)
-	defer db.Close()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalf("Unable to load config: %v", err)
+	}
+	database, err := db.Connect(cfg.DB)
+	if err != nil {
+		log.Fatalf("Could not connect to DB: %v", err)
+	}
+	defer database.Close()
 
-	if err := migration.RunMigrations(db, "migration"); err != nil {
+	if err := migration.RunMigrations(database, "migration"); err != nil {
 		log.Fatalf("Failed to run migration: %v", err)
 	}
 
-	userRepo := user.NewPGRepository(db)
+	userRepo := user.NewPGRepository(database)
 	userService := user.NewService(userRepo)
 
 	emailService := email.NewSMTPEmailService(
@@ -30,7 +37,7 @@ func main() {
 		os.Getenv("EMAIL_PASSWORD"),
 		"no-reply@whatamitodo.com",
 	)
-	emailRepo := email.NewEmailRepository(db)
+	emailRepo := email.NewEmailRepository(database)
 
 	authService := auth.NewService(userService, emailService, emailRepo)
 	authHandler := auth.NewHandler(authService)

@@ -2,6 +2,8 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
 )
 
@@ -12,11 +14,11 @@ type RegisterEmailRequest struct {
 }
 
 type Handler struct {
-	authService *Service
+	service *Service
 }
 
-func NewHandler(authService *Service) *Handler {
-	return &Handler{authService: authService}
+func NewHandler(service *Service) *Handler {
+	return &Handler{service: service}
 }
 
 func (h *Handler) RegisterEmail(w http.ResponseWriter, r *http.Request) {
@@ -26,14 +28,20 @@ func (h *Handler) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.authService.RegisterEmail(req.Email, req.Password, req.Name)
+	ctx := r.Context()
+	err := h.service.RegisterEmail(ctx, req.Email, req.Password, req.Name)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, ErrUserAlreadyExists) {
+			http.Error(w, "User already exist", http.StatusConflict)
+			return
+		}
+		log.Printf("Failed to register email: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("Verification email sent"))
+	w.Write([]byte(`{"message":"Verification email sent"}`))
 }
 
 type VerifyEmailRequest struct {
@@ -48,8 +56,11 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.authService.VerifyEmail(req.Email, req.Code)
+	ctx := r.Context()
+	err := h.service.VerifyEmail(ctx, req.Email, req.Code)
+
 	if err != nil {
+		log.Printf("Failed to verify emai: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

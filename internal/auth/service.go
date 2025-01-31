@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -12,24 +13,25 @@ import (
 
 var (
 	ErrUserAlreadyExists = errors.New("user already exists")
+	ErrUserNotFound      = errors.New("user not found")
 )
 
 type Service struct {
-	userService user.UserService
+	userService user.Service
 	emailSvc    email.EmailService
 	emailRepo   email.EmailRepository
 }
 
-func NewService(userService user.UserService, emailSvc email.EmailService, emailRepo email.EmailRepository) *Service {
+func NewService(u user.Service, e email.EmailService, er email.EmailRepository) *Service {
 	return &Service{
-		userService: userService,
-		emailSvc:    emailSvc,
-		emailRepo:   emailRepo,
+		userService: u,
+		emailSvc:    e,
+		emailRepo:   er,
 	}
 }
 
-func (s *Service) RegisterEmail(email, password, name string) error {
-	exists, err := s.userService.UserExists(email)
+func (s *Service) RegisterEmail(ctx context.Context, email, password, name string) error {
+	exists, err := s.userService.UserExists(ctx, email)
 	if err != nil {
 		return err
 	}
@@ -43,7 +45,7 @@ func (s *Service) RegisterEmail(email, password, name string) error {
 		return err
 	}
 
-	userID, err := s.userService.CreateUser(email, hashedPassword, name)
+	userID, err := s.userService.CreateUser(ctx, email, hashedPassword, name)
 	if err != nil {
 		return err
 	}
@@ -51,7 +53,7 @@ func (s *Service) RegisterEmail(email, password, name string) error {
 	code := GenerateVerificationCode()
 	expiresAt := time.Now().Add(10 * time.Minute)
 
-	err = s.emailRepo.SaveVerificationCode(userID, code, expiresAt)
+	err = s.emailRepo.SaveVerificationCode(ctx, userID, code, expiresAt)
 	if err != nil {
 		return err
 	}
@@ -64,15 +66,15 @@ func (s *Service) RegisterEmail(email, password, name string) error {
 func GenerateVerificationCode() string {
 	rand.NewSource(time.Now().UnixNano())
 	letters := "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	code := make([]byte, 6)
+	code := make([]byte, 4)
 	for i := range code {
 		code[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(code)
 }
 
-func (s *Service) VerifyEmail(email, code string) error {
-	user, err := s.userService.GetUserByEmail(email)
+func (s *Service) VerifyEmail(ctx context.Context, email, code string) error {
+	user, err := s.userService.GetUserByEmail(ctx, email)
 	if err != nil {
 		return err
 	}
@@ -81,7 +83,7 @@ func (s *Service) VerifyEmail(email, code string) error {
 		return fmt.Errorf("user not found")
 	}
 
-	verificationCode, err := s.emailRepo.GetVerificationCode(user.ID)
+	verificationCode, err := s.emailRepo.GetVerificationCode(ctx, user.ID)
 	if err != nil {
 		return err
 	}
@@ -98,12 +100,12 @@ func (s *Service) VerifyEmail(email, code string) error {
 		return fmt.Errorf("Invalid verification code")
 	}
 
-	err = s.userService.MarkEmailAsVerified(user.ID)
+	err = s.userService.MarkEmailAsVerified(ctx, user.ID)
 	if err != nil {
 		return err
 	}
 
-	err = s.emailRepo.DeleteVerificationCode(user.ID)
+	err = s.emailRepo.DeleteVerificationCode(ctx, user.ID)
 	if err != nil {
 		return err
 	}

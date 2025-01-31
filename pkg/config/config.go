@@ -1,44 +1,57 @@
 package config
 
 import (
-	"database/sql"
 	"fmt"
 	_ "github.com/lib/pq"
-	"log"
 	"os"
+	"strconv"
 )
 
 type Config struct {
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	SSLMode    string
+	AppPort int
+	DB      DBConfig
+	SMTP    SMTPConfig
 }
 
-func LoadConfig() *Config {
-	return &Config{
-		DBHost:     os.Getenv("DB_HOST"),
-		DBPort:     os.Getenv("DB_PORT"),
-		DBUser:     os.Getenv("DB_USER"),
-		DBPassword: os.Getenv("DB_PASSWORD"),
-		DBName:     os.Getenv("DB_NAME"),
-		SSLMode:    os.Getenv("DB_SSLMODE"),
-	}
+type DBConfig struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	Name     string
+	SSLMode  string
 }
 
-func ConnectDB(cfg *Config) *sql.DB {
-	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.SSLMode,
-	)
+type SMTPConfig struct {
+	Host     string
+	Port     string
+	Username string
+	Password string
+	From     string
+}
 
-	db, err := sql.Open("postgres", dsn)
+func LoadConfig() (*Config, error) {
+	var c Config
+
+	appPortStr := os.Getenv("APP_PORT")
+	port, err := strconv.Atoi(appPortStr)
 	if err != nil {
-		log.Fatalf("Failed to ping database: %v", err)
+		return nil, fmt.Errorf("invalid APP_PORT: %w", err)
 	}
+	c.AppPort = port
 
-	log.Println("Connected to the database successfully")
-	return db
+	c.DB.Host = os.Getenv("DB_HOST")
+	c.DB.Port = os.Getenv("DB_PORT")
+	c.DB.User = os.Getenv("DB_USER")
+	c.DB.Password = os.Getenv("DB_PASSWORD")
+	c.DB.Name = os.Getenv("DB_NAME")
+	c.DB.SSLMode = os.Getenv("DB_SSLMODE")
+
+	c.SMTP.Host = os.Getenv("SMTP_HOST")
+	c.SMTP.Port = os.Getenv("SMTP_PORT")
+	c.SMTP.Username = os.Getenv("SMTP_USERNAME")
+	c.SMTP.Password = os.Getenv("SMTP_PASSWORD")
+	c.SMTP.From = os.Getenv("SMTP_FROM")
+
+	return &c, nil
 }

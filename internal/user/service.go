@@ -1,22 +1,24 @@
 package user
 
-type UserService interface {
-	CreateUser(email, passwordHash, name string) (int, error)
-	UserExists(email string) (bool, error)
-	GetUserByEmail(email string) (*User, error)
-	MarkEmailAsVerified(id int64) error
+import "context"
+
+type Service interface {
+	CreateUser(ctx context.Context, email, passwordHash, name string) (int64, error)
+	UserExists(ctx context.Context, email string) (bool, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	MarkEmailAsVerified(ctx context.Context, id int64) error
 }
 
-type Service struct {
-	repo UserRepository
+type service struct {
+	repo Repository
 }
 
-func NewService(repo UserRepository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository) Service {
+	return &service{repo: repo}
 }
 
-func (s *Service) CreateUser(email, passwordHash, name string) (int, error) {
-	exists, err := s.UserExists(email)
+func (s *service) CreateUser(ctx context.Context, email, passwordHash, name string) (int64, error) {
+	exists, err := s.repo.UserExists(ctx, email)
 	if err != nil {
 		return 0, err
 	}
@@ -30,7 +32,7 @@ func (s *Service) CreateUser(email, passwordHash, name string) (int, error) {
 		Name:         name,
 	}
 
-	userID, err := s.repo.CreateUser(user)
+	userID, err := s.repo.CreateUser(ctx, user)
 	if err != nil {
 		return 0, err
 	}
@@ -38,14 +40,14 @@ func (s *Service) CreateUser(email, passwordHash, name string) (int, error) {
 	return userID, nil
 }
 
-func (s *Service) UserExists(email string) (bool, error) {
-	return s.repo.UserExists(email)
+func (s *service) UserExists(ctx context.Context, email string) (bool, error) {
+	return s.repo.UserExists(ctx, email)
 }
 
-func (s *Service) GetUserByEmail(email string) (*User, error) {
-	return s.repo.GetUserByEmail(email)
+func (s *service) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	return s.repo.GetUserByEmail(ctx, email)
 }
 
-func (s *Service) MarkEmailAsVerified(id int64) error {
-	return s.repo.MarkEmailAsVerified(id)
+func (s *service) MarkEmailAsVerified(ctx context.Context, id int64) error {
+	return s.repo.MarkEmailAsVerified(ctx, id)
 }

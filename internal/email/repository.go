@@ -1,19 +1,16 @@
 package email
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
 )
 
 type EmailRepository interface {
-	SaveVerificationCode(userID int, code string, expiresAt time.Time) error
-	VerificationRepository
-}
-
-type VerificationRepository interface {
-	GetVerificationCode(userID int64) (*VerificationCode, error)
-	DeleteVerificationCode(userID int64) error
+	SaveVerificationCode(ctx context.Context, userID int64, code string, expiresAt time.Time) error
+	GetVerificationCode(ctx context.Context, userID int64) (*VerificationCode, error)
+	DeleteVerificationCode(ctx context.Context, userID int64) error
 }
 
 type VerificationCode struct {
@@ -21,7 +18,7 @@ type VerificationCode struct {
 	ExpiresAt time.Time
 }
 
-type EmailRepositoryImpl struct {
+type emailRepositoryImpl struct {
 	db *sql.DB
 }
 
@@ -29,34 +26,30 @@ type VerificationRepositoryImpl struct {
 	db *sql.DB
 }
 
-func NewVerificationRepository(db *sql.DB) *VerificationRepositoryImpl {
-	return &VerificationRepositoryImpl{db: db}
+func NewEmailRepository(db *sql.DB) EmailRepository {
+	return &emailRepositoryImpl{db: db}
 }
 
-func NewEmailRepository(db *sql.DB) *EmailRepositoryImpl {
-	return &EmailRepositoryImpl{db: db}
-}
-
-func (r *EmailRepositoryImpl) SaveVerificationCode(userID int, code string, expiresAt time.Time) error {
+func (r *emailRepositoryImpl) SaveVerificationCode(ctx context.Context, userID int64, code string, expiresAt time.Time) error {
 	query := `
 		INSERT INTO email_verifications (user_id, code, expires_at)
 		VALUES ($1, $2, $3)
 	`
-	_, err := r.db.Exec(query, userID, code, expiresAt)
+	_, err := r.db.ExecContext(ctx, query, userID, code, expiresAt)
 	if err != nil {
 		return fmt.Errorf("failed to save verification code: %w", err)
 	}
 	return nil
 }
 
-func (r *EmailRepositoryImpl) GetVerificationCode(userID int64) (*VerificationCode, error) {
+func (r *emailRepositoryImpl) GetVerificationCode(ctx context.Context, userID int64) (*VerificationCode, error) {
 	query := `
 		SELECT code, expires_at
 		FROM email_verifications
 		WHERE user_id = $1
 	`
 	code := &VerificationCode{}
-	err := r.db.QueryRow(query, userID).Scan(&code.Code, &code.ExpiresAt)
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&code.Code, &code.ExpiresAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -66,12 +59,12 @@ func (r *EmailRepositoryImpl) GetVerificationCode(userID int64) (*VerificationCo
 	return code, nil
 }
 
-func (r *EmailRepositoryImpl) DeleteVerificationCode(userID int64) error {
+func (r *emailRepositoryImpl) DeleteVerificationCode(ctx context.Context, userID int64) error {
 	query := `
 		DELETE FROM email_verifications
 		WHERE user_id = $1
 	`
-	_, err := r.db.Exec(query, userID)
+	_, err := r.db.ExecContext(ctx, query, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete verification code: %w", err)
 	}
