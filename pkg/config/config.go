@@ -8,9 +8,11 @@ import (
 )
 
 type Config struct {
-	AppPort int
-	DB      DBConfig
-	SMTP    SMTPConfig
+	AppPort          int
+	DB               DBConfig
+	SMTP             SMTPConfig
+	JWTAccessSecret  string
+	JWTRefreshSecret string
 }
 
 type DBConfig struct {
@@ -52,6 +54,9 @@ func LoadConfig() (*Config, error) {
 	c.SMTP.Username = os.Getenv("SMTP_USERNAME")
 	c.SMTP.Password = os.Getenv("SMTP_PASSWORD")
 	c.SMTP.From = os.Getenv("SMTP_FROM")
+
+	c.JWTAccessSecret = os.Getenv("JWT_ACCESS_SECRET")
+	c.JWTRefreshSecret = os.Getenv("JWT_REFRESH_SECRET")
 
 	return &c, nil
 }

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"log"
 	"net/http"
 	"os"
@@ -10,6 +13,7 @@ import (
 	"task-planner/internal/user"
 	"task-planner/migration"
 	"task-planner/pkg/config"
+	"time"
 )
 
 func main() {
@@ -38,22 +42,34 @@ func main() {
 		"no-reply@whatamitodo.com",
 	)
 	emailRepo := email.NewEmailRepository(database)
+	tokenRepo := auth.NewTokenRepository(database)
 
-	authService := auth.NewService(userService, emailService, emailRepo)
+	jwtCfg := auth.JWTConfig{
+		AccessSecret:  cfg.JWTAccessSecret,
+		RefreshSecret: cfg.JWTRefreshSecret,
+		AccessTTL:     15 * time.Minute,
+		RefreshTTL:    24 * time.Hour * 7,
+	}
+
+	authService := auth.NewService(userService, emailService, emailRepo, tokenRepo, jwtCfg)
 	authHandler := auth.NewHandler(authService)
 
-	http.HandleFunc("/register/email", authHandler.RegisterEmail)
-	http.HandleFunc("/register/email/verify", authHandler.VerifyEmail)
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		_, err := w.Write([]byte("App is running"))
-		if err != nil {
-			return
-		}
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("App is running"))
 	})
 
-	log.Println("Starting server on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	r.Post("/register/email", authHandler.RegisterEmail)
+	r.Post("/register/email/verify", authHandler.VerifyEmail)
+
+	r.Post("/login", authHandler.Login)
+	r.Post("/refresh", authHandler.Refresh)
+
+	addr := fmt.Sprintf(":%d", cfg.AppPort)
+	log.Printf("Starting server on %s", addr)
+	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
