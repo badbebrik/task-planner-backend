@@ -3,8 +3,8 @@ package goal
 import "time"
 
 type Goal struct {
-	ID            string    `json:"id"`
-	UserId        string    `json:"user_id"`
+	ID            int64     `json:"id"`
+	UserId        int64     `json:"user_id"`
 	Title         string    `json:"title"`
 	Description   string    `json:"description"`
 	Status        string    `json:"status"`
@@ -14,8 +14,8 @@ type Goal struct {
 }
 
 type Phase struct {
-	ID            string    `json:"id"`
-	GoalId        string    `json:"goalId"`
+	ID            int64     `json:"id"`
+	GoalId        int64     `json:"goalId"`
 	Title         string    `json:"title"`
 	Description   string    `json:"description"`
 	Status        string    `json:"status"`
@@ -25,9 +25,9 @@ type Phase struct {
 }
 
 type Task struct {
-	ID            string    `json:"id"`
-	GoalId        string    `json:"goalId"`
-	PhaseId       *string   `json:"phase_id,omitempty"`
+	ID            int64     `json:"id"`
+	GoalId        int64     `json:"goalId"`
+	PhaseId       *int64    `json:"phase_id,omitempty"`
 	Title         string    `json:"title"`
 	Description   string    `json:"description"`
 	Status        string    `json:"status"`
