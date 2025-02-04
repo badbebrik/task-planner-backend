@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 )
 
 type GoalRepository interface {
 	CreateGoal(ctx context.Context, g *Goal) error
-	GetGoalByID(ctx context.Context, id int64) (*Goal, error)
+	GetGoalByID(ctx context.Context, id uuid.UUID) (*Goal, error)
 	UpdateGoal(ctx context.Context, g *Goal) error
 }
 type PhaseRepository interface {
@@ -40,7 +41,7 @@ func (r *repositoryImpl) CreateGoal(ctx context.Context, g *Goal) error {
 	return nil
 }
 
-func (r *repositoryImpl) GetGoalByID(ctx context.Context, goalID string) (*Goal, error) {
+func (r *repositoryImpl) GetGoalByID(ctx context.Context, goalID uuid.UUID) (*Goal, error) {
 	query := `
         SELECT id, user_id, title, description, status, estimated_time, created_at, updated_at
         FROM goals
