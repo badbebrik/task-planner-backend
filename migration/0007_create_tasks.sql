@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS tasks (
-    id SERIAL PRIMARY KEY,
-    goal_id INT NOT NULL,
-    phase_id INT,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    goal_id UUID NOT NULL,
+    phase_id UUID,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'in-progress',

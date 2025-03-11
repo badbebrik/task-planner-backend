@@ -6,9 +6,10 @@ import (
 )
 
 type Goal struct {
-	ID            uuid.UUID `json:"id"`
-	UserId        int64     `json:"user_id"`
-	Title         string    `json:"title"`
+	ID     uuid.UUID `json:"id"`
+	UserId int64     `json:"user_id"`
+	Title  string    `json:"title"`
+
 	Description   string    `json:"description"`
 	Status        string    `json:"status"`
 	EstimatedTime int64     `json:"estimated_time"`
