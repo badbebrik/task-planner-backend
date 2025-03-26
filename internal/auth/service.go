@@ -174,3 +174,28 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	}
 	return nil
 }
+
+func (s *Service) ResendVerificationCode(ctx context.Context, email string) error {
+	user, err := s.userService.GetUserByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return ErrUserNotFound
+	}
+
+	if user.IsEmailVerified {
+		return errors.New("email already verified")
+	}
+
+	code := GenerateVerificationCode()
+	expiresAt := time.Now().Add(10 * time.Minute)
+
+	err = s.emailRepo.SaveVerificationCode(ctx, user.ID, code, expiresAt)
+	if err != nil {
+		return err
+	}
+
+	s.emailSvc.SendVerificationEmailAsync(email, code)
+	return nil
+}

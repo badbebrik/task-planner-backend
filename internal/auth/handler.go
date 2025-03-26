@@ -147,3 +147,34 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"message": "Successfully logged out"}`))
 }
+
+type ResendVerificationRequest struct {
+	Email string `json:"email"`
+}
+
+func (h *Handler) ResendVerificationCode(w http.ResponseWriter, r *http.Request) {
+	var req ResendVerificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	err := h.service.ResendVerificationCode(ctx, req.Email)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		if err.Error() == "email already verified" {
+			http.Error(w, "Email already verified", http.StatusBadRequest)
+			return
+		}
+		log.Printf("Failed to resend verification code: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message": "Verification code resent"}`))
+}
