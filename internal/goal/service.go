@@ -97,7 +97,6 @@ func (s *service) UpdateGoal(ctx context.Context, goalID uuid.UUID, req UpdateGo
 }
 
 func (s *service) ListGoals(ctx context.Context, userID int64, req ListGoalsRequest) (*ListGoalsResponse, error) {
-	// TODO: Implement pagination, filtering and sorting
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -143,7 +142,6 @@ func (s *service) CreateTask(ctx context.Context, req CreateTaskRequest) (*TaskR
 }
 
 func (s *service) UpdateTask(ctx context.Context, taskID uuid.UUID, req UpdateTaskRequest) (*TaskResponse, error) {
-	// TODO: Implement task update
 	return nil, fmt.Errorf("not implemented")
 }
 
