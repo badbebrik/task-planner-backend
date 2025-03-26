@@ -217,14 +217,14 @@ func (h *Handler) CreateGoalDecomposed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	goal, err := h.service.CreateGoalDecomposed(r.Context(), claims.UserID, req.Title, req.Description)
+	preview, err := h.service.CreateGoalDecomposed(r.Context(), claims.UserID, req.Title, req.Description)
 	if err != nil {
 		log.Printf("[GOAL] Failed to create decomposed goal: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[GOAL] Successfully created decomposed goal with ID: %s", goal.ID)
+	log.Printf("[GOAL] Successfully created goal preview")
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(goal)
+	json.NewEncoder(w).Encode(preview)
 }

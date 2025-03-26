@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -18,21 +17,6 @@ import (
 	"time"
 )
 
-type HealthResponse struct {
-	Status    string `json:"status"`
-	Timestamp string `json:"timestamp"`
-}
-
-func healthCheck(w http.ResponseWriter, r *http.Request) {
-	response := HealthResponse{
-		Status:    "ok",
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
 func main() {
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -48,7 +32,7 @@ func main() {
 		log.Fatalf("Failed to run migration: %v", err)
 	}
 
-	userRepo := user.NewPGRepository(database)
+	userRepo := user.NewRepository(database)
 	userService := user.NewService(userRepo)
 
 	emailService := email.NewSMTPEmailService(

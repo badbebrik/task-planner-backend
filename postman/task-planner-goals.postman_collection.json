@@ -211,6 +211,32 @@
 					"path": ["goals", "tasks", "{{task_id}}"]
 				}
 			}
+		},
+		{
+			"name": "Предварительный просмотр декомпозиции цели",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"Разработать мобильное приложение\",\n    \"description\": \"Создать мобильное приложение для управления задачами с использованием React Native\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/goals/decompose",
+					"host": ["{{base_url}}"],
+					"path": ["goals", "decompose"]
+				},
+				"description": "Возвращает предварительный просмотр декомпозиции цели с фазами и задачами. Данные не сохраняются в БД.\n\nПример ответа:\n{\n    \"title\": \"Разработать мобильное приложение\",\n    \"description\": \"Создать мобильное приложение для управления задачами с использованием React Native\",\n    \"phases\": [\n        {\n            \"title\": \"Подготовка окружения\",\n            \"description\": \"Настройка рабочего окружения и необходимых инструментов\",\n            \"estimated_time\": 8,\n            \"tasks\": [\n                {\n                    \"title\": \"Установка Node.js и npm\",\n                    \"description\": \"Установить последнюю версию Node.js и npm\",\n                    \"estimated_time\": 1\n                },\n                {\n                    \"title\": \"Установка React Native CLI\",\n                    \"description\": \"Установить React Native CLI глобально\",\n                    \"estimated_time\": 1\n                }\n            ]\n        },\n        {\n            \"title\": \"Разработка базового функционала\",\n            \"description\": \"Реализация основных функций приложения\",\n            \"estimated_time\": 40,\n            \"tasks\": [\n                {\n                    \"title\": \"Создание структуры проекта\",\n                    \"description\": \"Инициализация проекта React Native и настройка базовой структуры\",\n                    \"estimated_time\": 4\n                },\n                {\n                    \"title\": \"Реализация навигации\",\n                    \"description\": \"Настройка навигации между экранами приложения\",\n                    \"estimated_time\": 8\n                }\n            ]\n        }\n    ]\n}"
+			}
 		}
 	],
 	"variable": [

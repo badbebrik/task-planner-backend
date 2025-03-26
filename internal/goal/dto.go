@@ -97,3 +97,22 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 	Details string `json:"details,omitempty"`
 }
+
+type PreviewPhase struct {
+	Title         string        `json:"title"`
+	Description   string        `json:"description"`
+	EstimatedTime int64         `json:"estimated_time"`
+	Tasks         []PreviewTask `json:"tasks"`
+}
+
+type PreviewTask struct {
+	Title         string `json:"title"`
+	Description   string `json:"description"`
+	EstimatedTime int64  `json:"estimated_time"`
+}
+
+type PreviewGoalResponse struct {
+	Title       string         `json:"title"`
+	Description string         `json:"description"`
+	Phases      []PreviewPhase `json:"phases"`
+}
