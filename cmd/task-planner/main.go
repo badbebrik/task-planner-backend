@@ -54,18 +54,33 @@ func main() {
 	authService := auth.NewService(userService, emailService, emailRepo, tokenRepo, jwtCfg)
 	authHandler := auth.NewHandler(authService)
 
+	rateLimiter := auth.NewRateLimiter(5*time.Minute, 5)
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("App is running"))
+	r.Group(func(r chi.Router) {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				ip := r.RemoteAddr
+				if !rateLimiter.Allow(ip) {
+					http.Error(w, "Too many requests", http.StatusTooManyRequests)
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
+		})
+
+		r.Post("/register/email", authHandler.RegisterEmail)
+		r.Post("/register/email/verify", authHandler.VerifyEmail)
+		r.Post("/login", authHandler.Login)
 	})
 
-	r.Post("/register/email", authHandler.RegisterEmail)
-	r.Post("/register/email/verify", authHandler.VerifyEmail)
-
-	r.Post("/login", authHandler.Login)
-	r.Post("/refresh", authHandler.Refresh)
+	r.Group(func(r chi.Router) {
+		r.Use(auth.JWTAuthMiddleware(cfg.JWTAccessSecret))
+		r.Post("/refresh", authHandler.Refresh)
+		r.Post("/logout", authHandler.Logout)
+	})
 
 	addr := fmt.Sprintf(":%d", cfg.AppPort)
 	log.Printf("Starting server on %s", addr)

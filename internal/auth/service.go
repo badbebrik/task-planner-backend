@@ -11,12 +11,6 @@ import (
 	"time"
 )
 
-var (
-	ErrUserAlreadyExists  = errors.New("user already exists")
-	ErrUserNotFound       = errors.New("user not found")
-	ErrInvalidCredentials = errors.New("invalid email or password")
-)
-
 type Service struct {
 	userService user.Service
 	emailSvc    email.EmailService
@@ -172,4 +166,11 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (newAc
 	}
 
 	return newAccess, newRefresh, nil
+}
+
+func (s *Service) Logout(ctx context.Context, refreshToken string) error {
+	if err := s.tokenRepo.DeleteRefreshToken(ctx, refreshToken); err != nil {
+		return fmt.Errorf("failed to delete refresh token: %w", err)
+	}
+	return nil
 }
