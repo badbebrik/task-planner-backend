@@ -23,7 +23,7 @@ type Service interface {
 	CreatePhase(ctx context.Context, req CreatePhaseRequest) (*PhaseResponse, error)
 	CreateTask(ctx context.Context, req CreateTaskRequest) (*TaskResponse, error)
 	UpdateTask(ctx context.Context, taskID uuid.UUID, req UpdateTaskRequest) (*TaskResponse, error)
-	CreateGoalDecomposed(ctx context.Context, userID int64, title, description string) (*GoalResponse, error)
+	CreateGoalDecomposed(ctx context.Context, userID int64, title, description string) (*PreviewGoalResponse, error)
 }
 
 type service struct {
@@ -145,47 +145,8 @@ func (s *service) UpdateTask(ctx context.Context, taskID uuid.UUID, req UpdateTa
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (s *service) CreateGoalDecomposed(ctx context.Context, userID int64, title, description string) (*GoalResponse, error) {
-	goalID := uuid.New()
-	g := &Goal{
-		ID:            goalID,
-		UserId:        userID,
-		Title:         title,
-		Description:   description,
-		Status:        "in-progress",
-		EstimatedTime: 0,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
-	}
-
-	phases, tasks, err := s.callOpenAIForDecomposition(title, description)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call openAI: %w", err)
-	}
-
-	for _, p := range phases {
-		p.ID = uuid.New()
-		p.GoalId = goalID
-		p.Status = "in-progress"
-		p.CreatedAt = time.Now()
-		p.UpdatedAt = time.Now()
-		if err := s.repo.CreatePhase(ctx, &p); err != nil {
-			return nil, fmt.Errorf("failed to create phase: %w", err)
-		}
-	}
-
-	for _, t := range tasks {
-		t.ID = uuid.New()
-		t.GoalId = goalID
-		t.Status = "in-progress"
-		t.CreatedAt = time.Now()
-		t.UpdatedAt = time.Now()
-		if err := s.repo.CreateTask(ctx, &t); err != nil {
-			return nil, fmt.Errorf("failed to create task: %w", err)
-		}
-	}
-
-	return s.toGoalResponse(g), nil
+func (s *service) CreateGoalDecomposed(ctx context.Context, userID int64, title, description string) (*PreviewGoalResponse, error) {
+	return s.callOpenAIForDecomposition(title, description)
 }
 
 func (s *service) toGoalResponse(g *Goal) *GoalResponse {
@@ -229,69 +190,81 @@ func (s *service) toTaskResponse(t *Task) *TaskResponse {
 }
 
 type decompositionResult struct {
-	Phases []Phase `json:"phases"`
-	Tasks  []Task  `json:"tasks"`
+	Goal PreviewGoalResponse `json:"goal"`
 }
 
-func (s *service) callOpenAIForDecomposition(title, description string) ([]Phase, []Task, error) {
+func (s *service) callOpenAIForDecomposition(title, description string) (*PreviewGoalResponse, error) {
 	prompt := fmt.Sprintf(`
 Ты ассистент, помогаешь декомпозировать большие цели на фазы и задачи.
 1. Учитывай, что "фаза" – это крупный этап, состоящий из нескольких задач.
 2. Задачи – это конкретные, короткие, понятные действия, которые пользователь может выполнить в ближайшее время.
 3. В ответе верни JSON со структурой:
 {
-  "phases": [
-    {
-      "title": "string",
-      "description": "string",
-      "estimated_time": "number"
-    },
-    ...
-  ],
-  "tasks": [
-    {
-      "title": "string",
-      "description": "string"
-      "estimated_time": "number"
-    },
-    ...
-  ]
+  "goal": {
+    "title": "string",
+    "description": "string",
+    "phases": [
+      {
+        "title": "string",
+        "description": "string",
+        "estimated_time": "number",
+        "tasks": [
+          {
+            "title": "string",
+            "description": "string",
+            "estimated_time": "number"
+          }
+        ]
+      },
+      ...
+    ]
+  }
 }
 
-Важно: кроме этого JSON ничего не пиши, никаких слов или пояснений вне JSON. EstimatedTime указывать в часах
+ВАЖНЫЕ ПРАВИЛА ДЛЯ ДЕКОМПОЗИЦИИ:
+1. Каждая задача должна быть конкретным действием, которое можно выполнить за 1-3 часа
+2. Задачи должны быть измеримыми и проверяемыми
+3. Сумма времени всех задач в фазе НЕ ДОЛЖНА превышать estimated_time фазы
+4. Для первой фазы создавай задачи на первую неделю работы (не более 40 часов, оптимально 10-20)
+5. Задачи должны быть последовательными и логически связанными
+6. Избегай слишком общих формулировок, используй конкретные действия
+7. Каждая задача должна иметь четкий результат
+
+Пример хорошей задачи:
+"Создать макеты экранов" - ПЛОХО
+"Нарисовать макет главного экрана в Figma" - ХОРОШО
+
+Пример плохой задачи:
+"Определить технологии" - ПЛОХО
+"Составить список необходимых библиотек для работы с базой данных" - ХОРОШО
+
+Задачи нужны только для первой фазы, для других оставь tasks пустым.
 
 Цель: %s
-Описание: %s
-`, title, description)
+Описание: %s`, title, description)
+
 	client := openai.NewClient(s.aiKey)
-	req := openai.ChatCompletionRequest{
-		Model: openai.GPT3Dot5Turbo,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: "Ты – специалист по планированию целей. Отвечаешь строго в JSON.",
+	resp, err := client.CreateChatCompletion(
+		context.Background(),
+		openai.ChatCompletionRequest{
+			Model: openai.GPT4,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: prompt,
+				},
 			},
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: prompt,
-			},
+			Temperature: 0.7,
 		},
-		Temperature: 0.2,
-	}
-	resp, err := client.CreateChatCompletion(context.Background(), req)
+	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("openAI CreateChatCompletion error: %w", err)
+		return nil, fmt.Errorf("failed to create chat completion: %w", err)
 	}
 
-	if len(resp.Choices) == 0 {
-		return nil, nil, fmt.Errorf("no choices in openAI response")
-	}
-
-	raw := resp.Choices[0].Message.Content
 	var result decompositionResult
-	err = json.Unmarshal([]byte(raw), &result)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal openAI response: %w\nOpenAI response was: %s", err, raw)
+	if err := json.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
-	return result.Phases, result.Tasks, nil
+
+	return &result.Goal, nil
 }

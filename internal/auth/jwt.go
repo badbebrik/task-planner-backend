@@ -3,23 +3,11 @@ package auth
 import (
 	"errors"
 	"github.com/golang-jwt/jwt/v4"
+	"task-planner/pkg/config"
 	"time"
 )
 
-type Claims struct {
-	UserID int64  `json:"user_id"`
-	Email  string `json:"email"`
-	jwt.RegisteredClaims
-}
-
-type JWTConfig struct {
-	AccessSecret  string
-	RefreshSecret string
-	AccessTTL     time.Duration
-	RefreshTTL    time.Duration
-}
-
-func GenerateTokenPair(userID int64, email string, cfg JWTConfig) (string, string, error) {
+func GenerateTokenPair(userID int64, email string, cfg config.JWTConfig) (string, string, error) {
 	accessClaims := &Claims{
 		UserID: userID,
 		Email:  email,

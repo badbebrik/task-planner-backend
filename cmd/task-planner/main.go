@@ -45,14 +45,7 @@ func main() {
 	emailRepo := email.NewEmailRepository(database)
 	tokenRepo := auth.NewTokenRepository(database)
 
-	jwtCfg := auth.JWTConfig{
-		AccessSecret:  cfg.JWTAccessSecret,
-		RefreshSecret: cfg.JWTRefreshSecret,
-		AccessTTL:     15 * time.Minute,
-		RefreshTTL:    24 * time.Hour * 7,
-	}
-
-	authService := auth.NewService(userService, emailService, emailRepo, tokenRepo, jwtCfg)
+	authService := auth.NewService(userService, emailService, emailRepo, tokenRepo, cfg.JWT)
 	authHandler := auth.NewHandler(authService)
 
 	rateLimiter := auth.NewRateLimiter(1*time.Minute, 60)
@@ -69,8 +62,6 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(auth.RateLimiterMiddleware(rateLimiter))
 
-	r.Get("/health", healthCheck)
-
 	r.Group(func(r chi.Router) {
 		r.Post("/register/email", authHandler.RegisterEmail)
 		r.Post("/register/email/verify", authHandler.VerifyEmail)
@@ -81,7 +72,7 @@ func main() {
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.JWTAuthMiddleware(cfg.JWTAccessSecret))
+		r.Use(auth.JWTAuthMiddleware(cfg.JWT.RefreshSecret))
 
 		r.Route("/goals", func(r chi.Router) {
 			r.Post("/", goalHandler.CreateGoal)

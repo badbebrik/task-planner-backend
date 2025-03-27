@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"task-planner/internal/email"
 	"task-planner/internal/user"
+	"task-planner/pkg/config"
 	"task-planner/pkg/security"
 	"time"
 )
@@ -16,10 +17,10 @@ type Service struct {
 	emailSvc    email.EmailService
 	emailRepo   email.EmailRepository
 	tokenRepo   TokenRepository
-	JWTConfig   JWTConfig
+	JWTConfig   config.JWTConfig
 }
 
-func NewService(u user.Service, e email.EmailService, er email.EmailRepository, tr TokenRepository, jwtCft JWTConfig) *Service {
+func NewService(u user.Service, e email.EmailService, er email.EmailRepository, tr TokenRepository, jwtCft config.JWTConfig) *Service {
 	return &Service{
 		userService: u,
 		emailSvc:    e,

@@ -5,14 +5,14 @@ import (
 	_ "github.com/lib/pq"
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
-	AppPort          int
-	DB               DBConfig
-	SMTP             SMTPConfig
-	JWTAccessSecret  string
-	JWTRefreshSecret string
+	AppPort int
+	DB      DBConfig
+	SMTP    SMTPConfig
+	JWT     JWTConfig
 }
 
 type DBConfig struct {
@@ -30,6 +30,13 @@ type SMTPConfig struct {
 	Username string
 	Password string
 	From     string
+}
+
+type JWTConfig struct {
+	AccessSecret  string
+	RefreshSecret string
+	AccessTTL     time.Duration
+	RefreshTTL    time.Duration
 }
 
 func LoadConfig() (*Config, error) {
@@ -55,8 +62,10 @@ func LoadConfig() (*Config, error) {
 	c.SMTP.Password = os.Getenv("SMTP_PASSWORD")
 	c.SMTP.From = os.Getenv("SMTP_FROM")
 
-	c.JWTAccessSecret = os.Getenv("JWT_ACCESS_SECRET")
-	c.JWTRefreshSecret = os.Getenv("JWT_REFRESH_SECRET")
+	c.JWT.AccessSecret = os.Getenv("JWT_ACCESS_SECRET")
+	c.JWT.RefreshSecret = os.Getenv("JWT_REFRESH_SECRET")
+	c.JWT.AccessTTL = 15 * time.Minute
+	c.JWT.RefreshTTL = 24 * time.Hour * 7
 
 	return &c, nil
 }
