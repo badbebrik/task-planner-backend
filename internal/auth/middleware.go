@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"task-planner/pkg/response"
 	"time"
 )
 
@@ -69,20 +70,20 @@ func JWTAuthMiddleware(secret string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(w, "Authorization header is required", http.StatusUnauthorized)
+				response.Error(w, http.StatusUnauthorized, "Authorization header is required")
 				return
 			}
 
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+				response.Error(w, http.StatusUnauthorized, "Invalid authorization header format")
 				return
 			}
 
 			token := parts[1]
 			claims, err := ValidateToken(token, secret)
 			if err != nil {
-				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				response.Error(w, http.StatusUnauthorized, ErrInvalidToken.Error())
 				return
 			}
 

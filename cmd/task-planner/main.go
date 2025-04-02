@@ -63,12 +63,19 @@ func main() {
 	r.Use(auth.RateLimiterMiddleware(rateLimiter))
 
 	r.Group(func(r chi.Router) {
-		r.Post("/register/email", authHandler.RegisterEmail)
-		r.Post("/register/email/verify", authHandler.VerifyEmail)
-		r.Post("/register/email/resend", authHandler.ResendVerificationCode)
-		r.Post("/login", authHandler.Login)
-		r.Post("/refresh", authHandler.Refresh)
-		r.Post("/logout", authHandler.Logout)
+		r.Route("/api/auth", func(r chi.Router) {
+			r.Post("/signup", authHandler.Signup)
+			r.Post("/verify-email", authHandler.VerifyEmail)
+			r.Post("/send-code", authHandler.SendVerificationCode)
+			r.Post("/login", authHandler.Login)
+			r.Post("/refresh", authHandler.Refresh)
+			r.Post("/logout", authHandler.Logout)
+		})
+	})
+
+	r.Route("/api/users", func(r chi.Router) {
+		r.With(auth.JWTAuthMiddleware(cfg.JWT.AccessSecret)).
+			Get("/me", authHandler.GetMe)
 	})
 
 	r.Group(func(r chi.Router) {
