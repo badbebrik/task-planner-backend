@@ -79,7 +79,7 @@ func main() {
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.JWTAuthMiddleware(cfg.JWT.RefreshSecret))
+		r.Use(auth.JWTAuthMiddleware(cfg.JWT.AccessSecret))
 
 		r.Route("/goals", func(r chi.Router) {
 			r.Post("/", goalHandler.CreateGoal)
