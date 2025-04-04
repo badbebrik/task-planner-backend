@@ -1,4 +1,4 @@
-package create
+package dto
 
 import (
 	"github.com/google/uuid"
@@ -12,7 +12,7 @@ type GoalResponse struct {
 	Description   string          `json:"description"`
 	Status        string          `json:"status"`
 	HoursPerWeek  int             `json:"hours_per_week"`
-	EstimatedTime int64           `json:"estimated_time"`
+	EstimatedTime int             `json:"estimated_time"`
 	Progress      int             `json:"progress"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`

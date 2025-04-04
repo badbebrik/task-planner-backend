@@ -51,7 +51,7 @@ func main() {
 	rateLimiter := auth.NewRateLimiter(1*time.Minute, 60)
 
 	goalRepo := goal.NewRepository(database)
-	goalService := goal.NewService(goalRepo, os.Getenv("OPENAI_API_KEY"))
+	goalService := goal.NewService(goalRepo, database, os.Getenv("OPENAI_API_KEY"))
 	goalHandler := goal.NewHandler(goalService)
 
 	r := chi.NewRouter()
@@ -81,17 +81,11 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(auth.JWTAuthMiddleware(cfg.JWT.AccessSecret))
 
-		r.Route("/goals", func(r chi.Router) {
+		r.Route("/api/goals", func(r chi.Router) {
+			r.Post("/generate", goalHandler.GenerateGoal)
 			r.Post("/", goalHandler.CreateGoal)
 			r.Get("/", goalHandler.ListGoals)
 			r.Get("/{id}", goalHandler.GetGoal)
-			r.Put("/{id}", goalHandler.UpdateGoal)
-			r.Post("/decompose", goalHandler.CreateGoalDecomposed)
-
-			r.Post("/phases", goalHandler.CreatePhase)
-
-			r.Post("/tasks", goalHandler.CreateTask)
-			r.Put("/tasks/{id}", goalHandler.UpdateTask)
 		})
 	})
 

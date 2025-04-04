@@ -1,5 +1,7 @@
 package create
 
+import "task-planner/internal/goal/dto"
+
 type CreateGoalResponse struct {
-	Goal GoalResponse `json:"goal"`
+	Goal dto.GoalResponse `json:"goal"`
 }
