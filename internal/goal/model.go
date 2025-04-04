@@ -45,11 +45,24 @@ type Task struct {
 }
 
 func (p *Phase) CalculateProgress(tasks []Task) int {
-	var timeSpent = 0
+	timeSpent := 0
 	for _, t := range tasks {
 		if t.PhaseId != nil && *t.PhaseId == p.ID && t.Status == "completed" {
 			timeSpent += t.EstimatedTime
 		}
 	}
 	return timeSpent / p.EstimatedTime * 100
+}
+
+func (g *Goal) CalculateProgress(tasks []Task) int {
+	timeSpent := 0
+	for _, t := range tasks {
+		if t.GoalId == g.ID && t.Status == "completed" {
+			timeSpent += t.EstimatedTime
+		}
+	}
+
+	result := max(timeSpent/g.EstimatedTime*100, 100)
+
+	return result
 }
