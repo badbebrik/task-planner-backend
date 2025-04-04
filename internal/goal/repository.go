@@ -8,16 +8,25 @@ import (
 	"time"
 )
 
+type RepositoryAggregator interface {
+	GoalRepository
+	PhaseRepository
+	TaskRepository
+}
+
 type GoalRepository interface {
 	CreateGoal(ctx context.Context, g *Goal) error
 	GetGoalByID(ctx context.Context, id uuid.UUID) (*Goal, error)
 	UpdateGoal(ctx context.Context, g *Goal) error
+	ListGoals(ctx context.Context, userID int64, limit, offset int, status string) ([]Goal, int, error)
 }
 type PhaseRepository interface {
 	CreatePhase(ctx context.Context, p *Phase) error
+	ListPhasesByGoalID(ctx context.Context, goalID uuid.UUID) ([]Phase, error)
 }
 type TaskRepository interface {
 	CreateTask(ctx context.Context, t *Task) error
+	ListTasksByGoalID(ctx context.Context, goalID uuid.UUID) ([]Task, error)
 }
 
 type repositoryImpl struct {

@@ -9,12 +9,6 @@ import (
 	"time"
 )
 
-type RepositoryAggregator interface {
-	GoalRepository
-	PhaseRepository
-	TaskRepository
-}
-
 type Service interface {
 	CreateGoal(ctx context.Context, userID int64, req CreateGoalRequest) (*GoalResponse, error)
 	GetGoal(ctx context.Context, goalID uuid.UUID) (*GoalResponse, error)
