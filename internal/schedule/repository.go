@@ -217,16 +217,135 @@ func combineDateTime(date, tm time.Time) time.Time {
 }
 
 func (r repositoryImpl) ListScheduledTasksInRange(ctx context.Context, startDate, endDate time.Time) ([]ScheduledTask, error) {
-	//TODO implement me
-	panic("implement me")
+	query := `
+SELECT 
+    st.id, st.task_id, st.time_slot_id,
+    st.scheduled_date, st.start_time, st.end_time,
+    st.status, st.created_at, st.updated_at
+FROM scheduled_task st
+WHERE st.scheduled_date >= $1
+  AND st.scheduled_date <= $2
+ORDER BY st.scheduled_date, st.start_time
+`
+	rows, err := r.db.QueryContext(ctx, query,
+		startDate.Format("2025-01-02"),
+		endDate.Format("2025-01-02"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list scheduled tasks in range: %w", err)
+	}
+	defer rows.Close()
+
+	var result []ScheduledTask
+	for rows.Next() {
+		var st ScheduledTask
+		var dateStr, stStr, etStr string
+		if err := rows.Scan(
+			&st.ID,
+			&st.TaskID,
+			&st.TimeSlotID,
+			&dateStr,
+			&stStr,
+			&etStr,
+			&st.Status,
+			&st.CreatedAt,
+			&st.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		sd, _ := time.Parse("2025-01-02", dateStr)
+		stt, _ := time.Parse("15:04:05", stStr)
+		ett, _ := time.Parse("15:04:05", etStr)
+
+		st.ScheduledDate = sd
+		st.StartTime = combineDateTime(sd, stt)
+		st.EndTime = combineDateTime(sd, ett)
+
+		result = append(result, st)
+	}
+	return result, nil
 }
 
 func (r repositoryImpl) ListUpcomingTasks(ctx context.Context, limit int) ([]ScheduledTask, error) {
-	//TODO implement me
-	panic("implement me")
+	query := fmt.Sprintf(`
+SELECT 
+    st.id, st.task_id, st.time_slot_id,
+    st.scheduled_date, st.start_time, st.end_time,
+    st.status, st.created_at, st.updated_at
+FROM scheduled_task st
+WHERE st.scheduled_date >= $1
+ORDER BY st.scheduled_date, st.start_time
+LIMIT %d
+`, limit)
+
+	rows, err := r.db.QueryContext(ctx, query, time.Now().Format("2025-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list upcoming tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var result []ScheduledTask
+	for rows.Next() {
+		var st ScheduledTask
+		var dateStr, stStr, etStr string
+		if err := rows.Scan(
+			&st.ID,
+			&st.TaskID,
+			&st.TimeSlotID,
+			&dateStr,
+			&stStr,
+			&etStr,
+			&st.Status,
+			&st.CreatedAt,
+			&st.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		sd, _ := time.Parse("2025-01-02", dateStr)
+		stt, _ := time.Parse("15:04:05", stStr)
+		ett, _ := time.Parse("15:04:05", etStr)
+
+		st.ScheduledDate = sd
+		st.StartTime = combineDateTime(sd, stt)
+		st.EndTime = combineDateTime(sd, ett)
+
+		result = append(result, st)
+	}
+	return result, nil
 }
 
 func (r repositoryImpl) CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]struct{ Completed, Total int }, error) {
-	//TODO implement me
-	panic("implement me")
+	query := `
+SELECT 
+    scheduled_date,
+    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+    COUNT(*) as total
+FROM scheduled_task
+WHERE scheduled_date >= $1
+  AND scheduled_date <= $2
+GROUP BY scheduled_date
+`
+	rows, err := r.db.QueryContext(ctx, query,
+		startDate.Format("2025-01-02"),
+		endDate.Format("2025-01-02"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count tasks by day: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[time.Time]struct{ Completed, Total int })
+	for rows.Next() {
+		var dateStr string
+		var completed, total int
+		if err := rows.Scan(&dateStr, &completed, &total); err != nil {
+			return nil, err
+		}
+		dt, _ := time.Parse("2025-01-02", dateStr)
+		result[dt] = struct{ Completed, Total int }{
+			Completed: completed,
+			Total:     total,
+		}
+	}
+	return result, nil
 }
