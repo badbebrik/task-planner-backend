@@ -140,18 +140,80 @@ func pqArrayUUID(list []uuid.UUID) []string {
 }
 
 func (r repositoryImpl) CreateScheduledTask(ctx context.Context, st *ScheduledTask) error {
-	//TODO implement me
-	panic("implement me")
+	query := `INSERT INTO scheduled_task (id, task_id, time_slot_id, scheduled_date, start_time, end_time, status, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`
+	_, err := r.db.ExecContext(ctx, query,
+		st.ID,
+		st.TaskID,
+		st.TimeSlotID,
+		st.ScheduledDate,
+		st.StartTime,
+		st.EndTime,
+		st.Status,
+		st.CreatedAt,
+		st.UpdatedAt,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create schedued_task: %w", err)
+	}
+
+	return nil
 }
 
 func (r repositoryImpl) DeleteScheduledTasksByGoal(ctx context.Context, goalID uuid.UUID) error {
-	//TODO implement me
-	panic("implement me")
+	query := `DELETE FROM scheduled_task USING tasks WHERE scheduled_task.task_id = tasks.id AND task.goal_id = $1
+
+`
+	_, err := r.db.ExecContext(ctx, query, goalID)
+	if err != nil {
+		return fmt.Errorf("failed to delete scheduled tasks by goal: %w", err)
+	}
+	return nil
 }
 
 func (r repositoryImpl) ListScheduledTasksForDate(ctx context.Context, date time.Time) ([]ScheduledTask, error) {
-	//TODO implement me
-	panic("implement me")
+	query := `SELECT st.id, st.task_id, st.time_slot_id, st.scheduled_date, st.start_time, st.end_time, st.status, st.created_at, st.updated_at
+		FROM scheduled_task st WHERE st.scheduled_date = $1 ORDER BY st.start_time
+`
+	rows, err := r.db.QueryContext(ctx, query, date.Format("2025-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list scheduled tasks for date: %w", err)
+	}
+	defer rows.Close()
+
+	var result []ScheduledTask
+	for rows.Next() {
+		var st ScheduledTask
+		var dateStr, stStr, etStr string
+		if err := rows.Scan(
+			&st.ID,
+			&st.TaskID,
+			&st.TimeSlotID,
+			&dateStr,
+			&stStr,
+			&etStr,
+			&st.Status,
+			&st.CreatedAt,
+			&st.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		sd, _ := time.Parse("2025-01-02", dateStr)
+		stt, _ := time.Parse("15:04:05", stStr)
+		ett, _ := time.Parse("15:04:05", etStr)
+
+		st.ScheduledDate = sd
+		st.StartTime = combineDateTime(sd, stt)
+		st.EndTime = combineDateTime(sd, ett)
+		result = append(result, st)
+	}
+	return result, nil
+}
+
+func combineDateTime(date, tm time.Time) time.Time {
+	return time.Date(date.Year(), date.Month(), date.Day(), tm.Hour(), tm.Minute(), tm.Second(), 0, time.UTC)
 }
 
 func (r repositoryImpl) ListScheduledTasksInRange(ctx context.Context, startDate, endDate time.Time) ([]ScheduledTask, error) {
