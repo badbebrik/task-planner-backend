@@ -45,7 +45,7 @@ func (r *repositoryImpl) DeleteAvailabilityByGoal(ctx context.Context, goalID uu
 
 func (r repositoryImpl) CreateAvailability(ctx context.Context, av *Availability) error {
 	query := `INSERT INTO availability (id, goal_id, day_of_week, created_at, updated_at)
-				VALUES ($1, $2, $3, $4)
+				VALUES ($1, $2, $3, $4, $5)
 `
 	_, err := r.db.ExecContext(ctx, query, av.ID, av.GoalID, av.DayOfWeek, av.CreatedAt, av.UpdatedAt)
 	if err != nil {
@@ -74,12 +74,69 @@ func (r repositoryImpl) ListAvailabilityByGoall(ctx context.Context, goalID uuid
 }
 
 func (r repositoryImpl) CreateTimeSlot(ctx context.Context, slot *TimeSlot) error {
+	query := `INSERT INTO time_slot (id, availability_id, start_id, end_time, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+`
+	_, err := r.db.ExecContext(ctx, query,
+		slot.ID,
+		slot.AvailabilityID,
+		slot.StartTime,
+		slot.EndTime,
+		slot.CreatedAt,
+		slot.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create time_slot: %w", err)
+	}
 
+	return nil
 }
 
 func (r repositoryImpl) ListTimeSlotsByAvailabilityIDs(ctx context.Context, avIDs []uuid.UUID) ([]TimeSlot, error) {
-	//TODO implement me
-	panic("implement me")
+	if len(avIDs) == 0 {
+		return []TimeSlot{}, nil
+	}
+
+	query := `SELECT id, availability_id, start_time, end_time, created_at FROM time_slot WHERE availability_id = ANY ($1) ORDER BY start_time
+`
+	rows, err := r.db.QueryContext(ctx, query, pqArrayUUID(avIDs))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list time_slots: %w", err)
+	}
+	defer rows.Close()
+
+	var result []TimeSlot
+	for rows.Next() {
+		var ts TimeSlot
+		var startStr, endStr string
+		if err := rows.Scan(
+			&ts.ID,
+			&ts.AvailabilityID,
+			&ts.StartTime,
+			&ts.EndTime,
+			&startStr,
+			&endStr,
+		); err != nil {
+			return nil, err
+		}
+
+		st, _ := time.Parse("15:04:05", startStr)
+		et, _ := time.Parse("15:04:05", endStr)
+		ts.StartTime = st
+		ts.EndTime = et
+
+		result = append(result, ts)
+	}
+
+	return result, nil
+}
+
+func pqArrayUUID(list []uuid.UUID) []string {
+	out := make([]string, 0, len(list))
+	for _, id := range list {
+		out = append(out, id.String())
+	}
+	return out
 }
 
 func (r repositoryImpl) CreateScheduledTask(ctx context.Context, st *ScheduledTask) error {
