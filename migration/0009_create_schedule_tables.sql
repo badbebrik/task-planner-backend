@@ -25,5 +25,6 @@ CREATE TABLE IF NOT EXISTS scheduled_task (
     end_time TIME NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'scheduled', -- scheduled, completed, canceled
     created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
     CHECK (start_time < end_time)
 )
