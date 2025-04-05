@@ -10,6 +10,7 @@ import (
 	"task-planner/internal/auth"
 	"task-planner/internal/db"
 	"task-planner/internal/email"
+	"task-planner/internal/goal"
 	"task-planner/internal/user"
 	"task-planner/migration"
 	"task-planner/pkg/config"
@@ -31,7 +32,7 @@ func main() {
 		log.Fatalf("Failed to run migration: %v", err)
 	}
 
-	userRepo := user.NewPGRepository(database)
+	userRepo := user.NewRepository(database)
 	userService := user.NewService(userRepo)
 
 	emailService := email.NewSMTPEmailService(
@@ -44,28 +45,49 @@ func main() {
 	emailRepo := email.NewEmailRepository(database)
 	tokenRepo := auth.NewTokenRepository(database)
 
-	jwtCfg := auth.JWTConfig{
-		AccessSecret:  cfg.JWTAccessSecret,
-		RefreshSecret: cfg.JWTRefreshSecret,
-		AccessTTL:     15 * time.Minute,
-		RefreshTTL:    24 * time.Hour * 7,
-	}
-
-	authService := auth.NewService(userService, emailService, emailRepo, tokenRepo, jwtCfg)
+	authService := auth.NewService(userService, emailService, emailRepo, tokenRepo, cfg.JWT)
 	authHandler := auth.NewHandler(authService)
 
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	rateLimiter := auth.NewRateLimiter(1*time.Minute, 60)
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("App is running"))
+	goalRepo := goal.NewRepository(database)
+	goalService := goal.NewService(goalRepo, database, os.Getenv("OPENAI_API_KEY"))
+	goalHandler := goal.NewHandler(goalService)
+
+	r := chi.NewRouter()
+
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(auth.RateLimiterMiddleware(rateLimiter))
+
+	r.Group(func(r chi.Router) {
+		r.Route("/api/auth", func(r chi.Router) {
+			r.Post("/signup", authHandler.Signup)
+			r.Post("/verify-email", authHandler.VerifyEmail)
+			r.Post("/send-code", authHandler.SendVerificationCode)
+			r.Post("/login", authHandler.Login)
+			r.Post("/refresh", authHandler.Refresh)
+			r.Post("/logout", authHandler.Logout)
+		})
 	})
 
-	r.Post("/register/email", authHandler.RegisterEmail)
-	r.Post("/register/email/verify", authHandler.VerifyEmail)
+	r.Route("/api/users", func(r chi.Router) {
+		r.With(auth.JWTAuthMiddleware(cfg.JWT.AccessSecret)).
+			Get("/me", authHandler.GetMe)
+	})
 
-	r.Post("/login", authHandler.Login)
-	r.Post("/refresh", authHandler.Refresh)
+	r.Group(func(r chi.Router) {
+		r.Use(auth.JWTAuthMiddleware(cfg.JWT.AccessSecret))
+
+		r.Route("/api/goals", func(r chi.Router) {
+			r.Post("/generate", goalHandler.GenerateGoal)
+			r.Post("/", goalHandler.CreateGoal)
+			r.Get("/", goalHandler.ListGoals)
+			r.Get("/{id}", goalHandler.GetGoal)
+		})
+	})
 
 	addr := fmt.Sprintf(":%d", cfg.AppPort)
 	log.Printf("Starting server on %s", addr)

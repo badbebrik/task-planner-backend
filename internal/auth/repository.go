@@ -7,14 +7,6 @@ import (
 	"time"
 )
 
-type RefreshToken struct {
-	ID        int64
-	UserID    int64
-	Token     string
-	ExpiresAt time.Time
-	CreatedAt time.Time
-}
-
 type TokenRepository interface {
 	SaveRefreshToken(ctx context.Context, userID int64, token string, expiresAt time.Time) error
 	GetRefreshToken(ctx context.Context, token string) (*RefreshToken, error)
