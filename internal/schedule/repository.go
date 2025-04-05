@@ -55,13 +55,26 @@ func (r repositoryImpl) CreateAvailability(ctx context.Context, av *Availability
 }
 
 func (r repositoryImpl) ListAvailabilityByGoall(ctx context.Context, goalID uuid.UUID) ([]Availability, error) {
-	//TODO implement me
-	panic("implement me")
+	query := `SELECT id, goal_id, day_of_week, created_at, updated_at FROM availability WHERE goal_id = $1 ORDER BY day_of_week ASC`
+	rows, err := r.db.QueryContext(ctx, query, goalID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list availability: %w", err)
+	}
+	defer rows.Close()
+
+	var result []Availability
+	for rows.Next() {
+		var av Availability
+		if err := rows.Scan(&av.ID, &av.GoalID, &av.DayOfWeek, &av.CreatedAt, &av.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, av)
+	}
+	return result, nil
 }
 
 func (r repositoryImpl) CreateTimeSlot(ctx context.Context, slot *TimeSlot) error {
-	//TODO implement me
-	panic("implement me")
+
 }
 
 func (r repositoryImpl) ListTimeSlotsByAvailabilityIDs(ctx context.Context, avIDs []uuid.UUID) ([]TimeSlot, error) {
