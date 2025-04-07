@@ -11,7 +11,7 @@ import (
 type Repository interface {
 	DeleteAvailabilityByGoal(ctx context.Context, goalID uuid.UUID) error
 	CreateAvailability(ctx context.Context, av *Availability) error
-	ListAvailabilityByGoall(ctx context.Context, goalID uuid.UUID) ([]Availability, error)
+	ListAvailabilityByGoal(ctx context.Context, goalID uuid.UUID) ([]Availability, error)
 
 	CreateTimeSlot(ctx context.Context, slot *TimeSlot) error
 	ListTimeSlotsByAvailabilityIDs(ctx context.Context, avIDs []uuid.UUID) ([]TimeSlot, error)
@@ -54,7 +54,7 @@ func (r repositoryImpl) CreateAvailability(ctx context.Context, av *Availability
 	return nil
 }
 
-func (r repositoryImpl) ListAvailabilityByGoall(ctx context.Context, goalID uuid.UUID) ([]Availability, error) {
+func (r repositoryImpl) ListAvailabilityByGoal(ctx context.Context, goalID uuid.UUID) ([]Availability, error) {
 	query := `SELECT id, goal_id, day_of_week, created_at, updated_at FROM availability WHERE goal_id = $1 ORDER BY day_of_week ASC`
 	rows, err := r.db.QueryContext(ctx, query, goalID)
 	if err != nil {
