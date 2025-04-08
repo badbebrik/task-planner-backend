@@ -22,6 +22,8 @@ type Repository interface {
 	ListScheduledTasksInRange(ctx context.Context, startDate, endDate time.Time) ([]ScheduledTask, error)
 	ListUpcomingTasks(ctx context.Context, limit int) ([]ScheduledTask, error)
 
+	ListScheduledTasksForGoalInRange(ctx context.Context, goalID uuid.UUID, startDate, endDate time.Time) ([]ScheduledTask, error)
+
 	// todo: дополнить для статы или выкинуть нафиг
 	CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]struct{ Completed, Total int }, error)
 }
@@ -347,5 +349,66 @@ GROUP BY scheduled_date
 			Total:     total,
 		}
 	}
+	return result, nil
+}
+
+func (r *repositoryImpl) ListScheduledTasksForGoalInRange(ctx context.Context, goalID uuid.UUID, startDate, endDate time.Time) ([]ScheduledTask, error) {
+	query := `
+SELECT 
+    id, 
+    task_id, 
+    time_slot_id, 
+    scheduled_date, 
+    start_time, 
+    end_time,
+    status,
+    created_at
+FROM scheduled_task
+WHERE scheduled_date >= $1
+  AND scheduled_date <= $2
+  AND task_id IN (
+      SELECT id FROM tasks WHERE goal_id = $3
+  )
+ORDER BY scheduled_date, start_time
+`
+	rows, err := r.db.QueryContext(ctx,
+		query,
+		startDate.Format("2025-01-02"),
+		endDate.Format("2025-01-02"),
+		goalID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list scheduled tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var result []ScheduledTask
+	for rows.Next() {
+		var st ScheduledTask
+		var dateStr, startStr, endStr string
+		if err := rows.Scan(
+			&st.ID,
+			&st.TaskID,
+			&st.TimeSlotID,
+			&dateStr,
+			&startStr,
+			&endStr,
+			&st.Status,
+			&st.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		sd, _ := time.Parse("2025-01-02", dateStr)
+		stt, _ := time.Parse("15:04:05", startStr)
+		ett, _ := time.Parse("15:04:05", endStr)
+
+		st.ScheduledDate = sd
+		st.StartTime = time.Date(sd.Year(), sd.Month(), sd.Day(), stt.Hour(), stt.Minute(), stt.Second(), 0, time.UTC)
+		st.EndTime = time.Date(sd.Year(), sd.Month(), sd.Day(), ett.Hour(), ett.Minute(), ett.Second(), 0, time.UTC)
+
+		result = append(result, st)
+	}
+
 	return result, nil
 }
