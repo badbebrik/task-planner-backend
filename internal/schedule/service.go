@@ -466,21 +466,193 @@ func dateOnly(t time.Time) time.Time {
 }
 
 func (s *service) GetScheduleForDay(ctx context.Context, date time.Time) (*dto.GetScheduleForDayResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	scheduledList, err := s.repo.ListScheduledTasksInRange(ctx, date, date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list scheduled tasks for day: %w", err)
+	}
+
+	tasksMap, goalsMap, err := s.loadTasksAndGoals(ctx, scheduledList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tasks/goals: %w", err)
+	}
+
+	var items []dto.ScheduledTaskDTO
+	for _, st := range scheduledList {
+		t := tasksMap[st.TaskID]
+		g := goalsMap[t.GoalId]
+
+		items = append(items, dto.ScheduledTaskDTO{
+			ID:        st.ID,
+			GoalTitle: g.Title,
+			Title:     t.Title,
+			StartTime: st.StartTime.Format("15:04"),
+			EndTime:   st.EndTime.Format("15:04"),
+			Status:    st.Status,
+		})
+	}
+
+	resp := &dto.GetScheduleForDayResponse{
+		Date:  date.Format("2025-01-02"),
+		Tasks: items,
+	}
+	return resp, nil
 }
 
 func (s *service) GetScheduleRange(ctx context.Context, startDate, endDate time.Time) (*dto.GetScheduleRangeResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	scheduledList, err := s.repo.ListScheduledTasksInRange(ctx, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list scheduled tasks in range: %w", err)
+	}
+
+	tasksMap, goalsMap, err := s.loadTasksAndGoals(ctx, scheduledList)
+	if err != nil {
+		return nil, err
+	}
+
+	grouped := make(map[string][]dto.ScheduledTaskDTO)
+	for _, st := range scheduledList {
+		dateKey := st.ScheduledDate.Format("2025-01-02")
+
+		t := tasksMap[st.TaskID]
+		g := goalsMap[t.GoalId]
+
+		grouped[dateKey] = append(grouped[dateKey], dto.ScheduledTaskDTO{
+			ID:        st.ID,
+			GoalTitle: g.Title,
+			Title:     t.Title,
+			StartTime: st.StartTime.Format("15:04"),
+			EndTime:   st.EndTime.Format("15:04"),
+			Status:    st.Status,
+		})
+	}
+
+	var scheduleResult []dto.DaySchedule
+	for d := startDate; !d.After(endDate); d = d.AddDate(0, 0, 1) {
+		dateKey := d.Format("2025-01-02")
+		tasks := grouped[dateKey]
+		scheduleResult = append(scheduleResult, dto.DaySchedule{
+			Date:  dateKey,
+			Tasks: tasks,
+		})
+	}
+
+	return &dto.GetScheduleRangeResponse{
+		Schedule: scheduleResult,
+	}, nil
 }
 
 func (s *service) GetUpcomingTasks(ctx context.Context, limit int) (*dto.GetUpcomingTasksResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	if limit <= 0 {
+		limit = 5
+	}
+	stList, err := s.repo.ListUpcomingTasks(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list upcoming tasks: %w", err)
+	}
+
+	tasksMap, goalsMap, err := s.loadTasksAndGoals(ctx, stList)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []dto.UpcomingTaskDTO
+	for _, st := range stList {
+		t := tasksMap[st.TaskID]
+		g := goalsMap[t.GoalId]
+		items = append(items, dto.UpcomingTaskDTO{
+			ID:            st.ID,
+			GoalTitle:     g.Title,
+			Title:         t.Title,
+			ScheduledDate: st.ScheduledDate.Format("2025-01-02"),
+			StartTime:     st.StartTime.Format("15:04"),
+		})
+	}
+	return &dto.GetUpcomingTasksResponse{Tasks: items}, nil
 }
 
 func (s *service) GetStats(ctx context.Context) (*dto.GetStatsResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	today := dateOnly(time.Now())
+	startDate := today.AddDate(0, 0, -6)
+
+	dayMap, err := s.repo.CountTasksByDay(ctx, startDate, today)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count tasks by day: %w", err)
+	}
+
+	var weekly []dto.DayProgress
+	for d := startDate; !d.After(today); d = d.AddDate(0, 0, 1) {
+		data, ok := dayMap[d]
+		wdayStr := d.Weekday().String()[:3]
+		if !ok {
+			weekly = append(weekly, dto.DayProgress{
+				Day:       wdayStr,
+				Completed: 0,
+				Total:     0,
+			})
+			continue
+		}
+		weekly = append(weekly, dto.DayProgress{
+			Day:       wdayStr,
+			Completed: data.Completed,
+			Total:     data.Total,
+		})
+	}
+
+	goals := []dto.GoalStat{
+		{Title: "Выучить испанский", Progress: 35},
+		{Title: "Написать приложение", Progress: 10},
+	}
+
+	return &dto.GetStatsResponse{
+		WeeklyProgress: weekly,
+		Goals:          goals,
+	}, nil
+}
+
+func (s *service) loadTasksAndGoals(
+	ctx context.Context,
+	scheduledList []ScheduledTask,
+) (
+	map[uuid.UUID]goal.Task,
+	map[uuid.UUID]goal.Goal,
+	error,
+) {
+	taskIDs := make(map[uuid.UUID]struct{})
+	for _, st := range scheduledList {
+		taskIDs[st.TaskID] = struct{}{}
+	}
+
+	var ids []uuid.UUID
+	for id := range taskIDs {
+		ids = append(ids, id)
+	}
+
+	tasks, err := s.taskRepository.GetTasksByIDs(ctx, ids)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load tasks: %w", err)
+	}
+
+	taskMap := make(map[uuid.UUID]goal.Task)
+	goalIDs := make(map[uuid.UUID]struct{})
+	for _, t := range tasks {
+		taskMap[t.ID] = t
+		goalIDs[t.GoalId] = struct{}{}
+	}
+
+	var gIDs []uuid.UUID
+	for id := range goalIDs {
+		gIDs = append(gIDs, id)
+	}
+
+	goals, err := s.taskRepository.GetGoalsByIDs(ctx, gIDs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load goals: %w", err)
+	}
+
+	goalMap := make(map[uuid.UUID]goal.Goal)
+	for _, g := range goals {
+		goalMap[g.ID] = g
+	}
+
+	return taskMap, goalMap, nil
 }

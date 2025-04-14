@@ -4,7 +4,7 @@ CREATE TABLE IF Not EXISTS availability (
     day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0 - ПН, 1 - ВТ
     created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
-)
+);
 
 CREATE TABLE IF NOT EXISTS time_slot (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS time_slot (
     created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
     CHECK (start_time < end_time)
-)
+);
 
 CREATE TABLE IF NOT EXISTS scheduled_task (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -27,4 +27,4 @@ CREATE TABLE IF NOT EXISTS scheduled_task (
     created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
     CHECK (start_time < end_time)
-)
+);
