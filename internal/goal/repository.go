@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/google/uuid"
+	"strings"
 	"time"
 )
 
@@ -27,6 +28,8 @@ type PhaseRepository interface {
 type TaskRepository interface {
 	CreateTask(ctx context.Context, t *Task) error
 	ListTasksByGoalID(ctx context.Context, goalID uuid.UUID) ([]Task, error)
+	GetTasksByIDs(ctx context.Context, ids []uuid.UUID) ([]Task, error)
+	GetGoalsByIDs(ctx context.Context, ids []uuid.UUID) ([]Goal, error)
 }
 
 type repositoryImpl struct {
@@ -280,4 +283,82 @@ func (r *repositoryImpl) ListTasksByGoalID(ctx context.Context, goalID uuid.UUID
 		tasks = append(tasks, t)
 	}
 	return tasks, nil
+}
+
+func (r *repositoryImpl) GetTasksByIDs(ctx context.Context, ids []uuid.UUID) ([]Task, error) {
+	if len(ids) == 0 {
+		return []Task{}, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+	query := fmt.Sprintf(`
+        SELECT id, goal_id, phase_id, title, description, status, estimated_time, created_at, updated_at
+        FROM tasks
+        WHERE id IN (%s)
+    `, strings.Join(placeholders, ", "))
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query tasks by ids: %w", err)
+	}
+	defer rows.Close()
+
+	var result []Task
+	for rows.Next() {
+		var t Task
+		err := rows.Scan(
+			&t.ID, &t.GoalId, &t.PhaseId, &t.Title, &t.Description,
+			&t.Status, &t.EstimatedTime, &t.CreatedAt, &t.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan task: %w", err)
+		}
+		result = append(result, t)
+	}
+
+	return result, nil
+}
+
+func (r *repositoryImpl) GetGoalsByIDs(ctx context.Context, ids []uuid.UUID) ([]Goal, error) {
+	if len(ids) == 0 {
+		return []Goal{}, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+	query := fmt.Sprintf(`
+        SELECT id, user_id, title, description, status, estimated_time, created_at, updated_at
+        FROM goals
+        WHERE id IN (%s)
+    `, strings.Join(placeholders, ", "))
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query goals by ids: %w", err)
+	}
+	defer rows.Close()
+
+	var result []Goal
+	for rows.Next() {
+		var g Goal
+		err := rows.Scan(
+			&g.ID, &g.UserId, &g.Title, &g.Description, &g.Status,
+			&g.EstimatedTime, &g.CreatedAt, &g.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan goal: %w", err)
+		}
+		result = append(result, g)
+	}
+
+	return result, nil
 }
