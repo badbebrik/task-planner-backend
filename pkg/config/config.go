@@ -33,10 +33,11 @@ type SMTPConfig struct {
 }
 
 type JWTConfig struct {
-	AccessSecret  string
-	RefreshSecret string
-	AccessTTL     time.Duration
-	RefreshTTL    time.Duration
+	AccessSecret   string
+	RefreshSecret  string
+	AccessTTL      time.Duration
+	RefreshTTL     time.Duration
+	GoogleClientID string `mapstructure:"GOOGLE_CLIENT_ID"`
 }
 
 func LoadConfig() (*Config, error) {
