@@ -70,6 +70,7 @@ func main() {
 			r.Post("/login", authHandler.Login)
 			r.Post("/refresh", authHandler.Refresh)
 			r.Post("/logout", authHandler.Logout)
+			r.Post("/google", authHandler.GoogleLogin)
 		})
 	})
 
