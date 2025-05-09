@@ -8,10 +8,14 @@ import (
 )
 
 type Repository interface {
+	GetByID(ctx context.Context, id int64) (*User, error)
 	CreateUser(ctx context.Context, user *User) (int64, error)
 	UserExists(ctx context.Context, email string) (bool, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	MarkEmailAsVerified(ctx context.Context, userID int64) error
+	GetByGoogleID(ctx context.Context, googleID string) (*User, error)
+	CreateWithGoogle(ctx context.Context, email, googleID string) (int64, error)
+	LinkGoogleID(ctx context.Context, userID int64, googleID string) error
 }
 
 type PGRepository struct {
@@ -84,6 +88,79 @@ func (r *PGRepository) MarkEmailAsVerified(ctx context.Context, userID int64) er
 	_, err := r.db.ExecContext(ctx, query, userID)
 	if err != nil {
 		return fmt.Errorf("failed to mark email as verified: %w", err)
+	}
+	return nil
+}
+
+func (r *PGRepository) GetByID(ctx context.Context, id int64) (*User, error) {
+	const q = `
+        SELECT id, email, password_hash, name, is_email_verified, google_id
+        FROM users
+        WHERE id = $1
+    `
+	u := &User{}
+	err := r.db.QueryRowContext(ctx, q, id).Scan(
+		&u.ID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.Name,
+		&u.IsEmailVerified,
+		&u.GoogleID,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("repository.GetByID: %w", err)
+	}
+	return u, nil
+}
+
+func (r *PGRepository) GetByGoogleID(ctx context.Context, googleID string) (*User, error) {
+	const q = `
+        SELECT id, email, password_hash, name, is_email_verified, google_id
+        FROM users
+        WHERE google_id = $1
+    `
+	u := &User{}
+	err := r.db.QueryRowContext(ctx, q, googleID).Scan(
+		&u.ID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.Name,
+		&u.IsEmailVerified,
+		&u.GoogleID,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("repository.GetByGoogleID: %w", err)
+	}
+	return u, nil
+}
+
+func (r *PGRepository) CreateWithGoogle(ctx context.Context, email, googleID string) (int64, error) {
+	const q = `
+        INSERT INTO users (email, name, is_email_verified, google_id, created_at, updated_at)
+        VALUES ($1, '', TRUE, $2, NOW(), NOW())
+        RETURNING id
+    `
+	var newID int64
+	if err := r.db.QueryRowContext(ctx, q, email, googleID).Scan(&newID); err != nil {
+		return 0, fmt.Errorf("repository.CreateWithGoogle: %w", err)
+	}
+	return newID, nil
+}
+
+func (r *PGRepository) LinkGoogleID(ctx context.Context, userID int64, googleID string) error {
+	const q = `
+        UPDATE users
+        SET google_id = $1, updated_at = NOW()
+        WHERE id = $2
+    `
+	if _, err := r.db.ExecContext(ctx, q, googleID, userID); err != nil {
+		return fmt.Errorf("repository.LinkGoogleID: %w", err)
 	}
 	return nil
 }

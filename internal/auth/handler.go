@@ -193,3 +193,30 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	_ = json.NewEncoder(w).Encode(resp)
 }
+
+func (h *Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
+	var req dto.GoogleLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, ErrInvalidRequest.Error())
+		return
+	}
+
+	ctx := r.Context()
+	accessToken, refreshToken, usr, err := h.service.LoginWithGoogle(ctx, req.IDToken)
+	if err != nil {
+		response.Error(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	resp := dto.LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		User: dto.UserResponse{
+			Email: usr.Email,
+			Name:  usr.Name,
+			Id:    usr.ID,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}

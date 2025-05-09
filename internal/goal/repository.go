@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/google/uuid"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -116,37 +117,41 @@ func (r *repositoryImpl) UpdateGoal(ctx context.Context, g *Goal) error {
 	return nil
 }
 
-func (r *repositoryImpl) ListGoals(ctx context.Context, userID int64, limit, offset int, status string) ([]Goal, int, error) {
-	countQuery := `SELECT COUNT(*) FROM goals WHERE user_id = $1`
-	args := []interface{}{userID}
+func (r *repositoryImpl) ListGoals(
+	ctx context.Context,
+	userID int64,
+	limit, offset int,
+	status string,
+) ([]Goal, int, error) {
+	args := make([]interface{}, 0, 4)
+	idx := 1
+
+	where := "WHERE user_id = $" + strconv.Itoa(idx)
+	args = append(args, userID)
+	idx++
 
 	if status != "" {
-		countQuery += ` AND status = $2`
+		where += " AND status = $" + strconv.Itoa(idx)
+		args = append(args, status)
+		idx++
 	}
 
+	countQuery := "SELECT COUNT(*) FROM goals " + where
 	var total int
-	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
-	if err != nil {
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("failed to count goals: %w", err)
 	}
 
-	selectQuery := `SELECT id, user_id, title, description, status, estimated_time, hours_per_week, progress, 
-    				created_at, updated_at FROM goals
-					WHERE user_id = $1
-`
-	if status != "" {
-		selectQuery += ` AND status = $2`
-	}
-	selectQuery += ` ORDER BY updated_at DESC LIMIT $3 OFFSET $4`
+	selectQuery := "" +
+		"SELECT id, user_id, title, description, status, estimated_time, hours_per_week, progress, " +
+		"       created_at, updated_at " +
+		"FROM goals " + where +
+		" ORDER BY updated_at DESC " +
+		" LIMIT $" + strconv.Itoa(idx) +
+		" OFFSET $" + strconv.Itoa(idx+1)
+	args = append(args, limit, offset)
 
-	var rows *sql.Rows
-
-	if status == "" {
-		rows, err = r.db.QueryContext(ctx, selectQuery, userID, limit, offset)
-	} else {
-		rows, err = r.db.QueryContext(ctx, selectQuery, userID, status, limit, offset)
-	}
-
+	rows, err := r.db.QueryContext(ctx, selectQuery, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query goals: %w", err)
 	}
@@ -171,6 +176,10 @@ func (r *repositoryImpl) ListGoals(ctx context.Context, userID int64, limit, off
 		}
 		goals = append(goals, g)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("row iteration error: %w", err)
+	}
+
 	return goals, total, nil
 }
 

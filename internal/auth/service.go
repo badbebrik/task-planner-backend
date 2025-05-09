@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/api/idtoken"
 	"math/rand"
 	"task-planner/internal/email"
 	"task-planner/internal/user"
@@ -198,4 +199,64 @@ func (s *Service) SendVerificationCode(ctx context.Context, email string) error 
 
 	s.emailService.SendVerificationEmailAsync(email, code)
 	return nil
+}
+
+// verifyGoogleIDToken валидирует idToken у Google и возвращает subject и email
+func (s *Service) verifyGoogleIDToken(ctx context.Context, idToken string) (sub, email string, err error) {
+	payload, err := idtoken.Validate(ctx, idToken, s.JWTConfig.GoogleClientID)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to validate Google ID token: %w", err)
+	}
+	sub = payload.Subject
+	rawEmail, ok := payload.Claims["email"].(string)
+	if !ok || rawEmail == "" {
+		return "", "", fmt.Errorf("email not found in Google ID token")
+	}
+	email = rawEmail
+	return sub, email, nil
+}
+
+// LoginWithGoogle — вход через Google, поиск/создание user и генерация токенов
+func (s *Service) LoginWithGoogle(ctx context.Context, idToken string) (accessToken, refreshToken string, usr *user.User, err error) {
+	googleID, email, err := s.verifyGoogleIDToken(ctx, idToken)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	usr, err = s.userService.GetUserByGoogleID(ctx, googleID)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	if usr == nil {
+		usr, err = s.userService.GetUserByEmail(ctx, email)
+		if err != nil {
+			return "", "", nil, err
+		}
+		if usr != nil {
+			if err := s.userService.LinkGoogleID(ctx, usr.ID, googleID); err != nil {
+				return "", "", nil, err
+			}
+		} else {
+			newID, err := s.userService.CreateUserWithGoogle(ctx, email, googleID)
+			if err != nil {
+				return "", "", nil, err
+			}
+			usr, err = s.userService.GetUserByID(ctx, newID)
+			if err != nil {
+				return "", "", nil, err
+			}
+		}
+	}
+
+	accessToken, refreshToken, err = GenerateTokenPair(usr.ID, usr.Email, s.JWTConfig)
+	if err != nil {
+		return "", "", nil, err
+	}
+	expiresAt := time.Now().Add(s.JWTConfig.RefreshTTL)
+	if err := s.tokenRepo.SaveRefreshToken(ctx, usr.ID, refreshToken, expiresAt); err != nil {
+		return "", "", nil, err
+	}
+
+	return accessToken, refreshToken, usr, nil
 }

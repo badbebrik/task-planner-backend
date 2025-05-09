@@ -51,7 +51,9 @@ func (p *Phase) CalculateProgress(tasks []Task) int {
 			timeSpent += t.EstimatedTime
 		}
 	}
-	return timeSpent / p.EstimatedTime * 100
+	// BUG: fix estimated time query to llm
+	//return timeSpent / p.EstimatedTime * 100
+	return timeSpent
 }
 
 func (g *Goal) CalculateProgress(tasks []Task) int {
