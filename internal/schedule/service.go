@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"log"
 	"sort"
 	"task-planner/internal/goal"
 	"task-planner/internal/schedule/dto"
@@ -192,16 +193,18 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 	}()
 
 	tasks, err := s.taskRepository.ListTasksByGoalID(ctx, goalID)
+	log.Printf("[AutoSchedule] total tasks from repo: %d", len(tasks))
 	if err != nil {
 		return 0, fmt.Errorf("list tasks: %w", err)
 	}
 
 	var tasksToSchedule []plannedTask
 	for _, t := range tasks {
+		log.Printf("[AutoSchedule] task %s status=%q est=%d", t.ID, t.Status, t.EstimatedTime)
 		if t.Status != "todo" {
 			continue
 		}
-		toPlanMinutes := t.EstimatedTime
+		toPlanMinutes := t.EstimatedTime * 60
 		if toPlanMinutes <= 0 {
 			continue
 		}
@@ -215,10 +218,22 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 	}
 
 	avList, err := s.repo.ListAvailabilityByGoal(ctx, goalID)
+	log.Printf("[AutoSchedule] availability for goal %s: %+v", goalID, avList)
+
 	if err != nil {
 		return 0, fmt.Errorf("list availability: %w", err)
 	}
 	daySlotsMap, err := s.loadSlotsByDayOfWeek(ctx, avList)
+	for dow, slots := range daySlotsMap {
+		log.Printf("[AutoSchedule] dow=%d slotsCount=%d", dow, len(slots))
+		for _, slot := range slots {
+			log.Printf("  [Slot] id=%s start=%s end=%s",
+				slot.ID,
+				slot.StartTime.Format("15:04"),
+				slot.EndTime.Format("15:04"))
+		}
+	}
+
 	if err != nil {
 		return 0, err
 	}
@@ -231,8 +246,12 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 OUTER:
 	for dayOffset := 0; dayOffset < horizon; dayOffset++ {
 		currentDate := today.AddDate(0, 0, dayOffset)
-		dw := int(currentDate.Weekday())
-		slotsForDay := daySlotsMap[dw]
+		dow := int(currentDate.Weekday())
+		slotsForDay := daySlotsMap[dow]
+
+		log.Printf("[AutoSchedule] checking date %s (dow=%d), slotsForDay=%d",
+			currentDate.Format("2006-01-02"), dow, len(slotsForDay))
+
 		if len(slotsForDay) == 0 {
 			continue
 		}
@@ -241,6 +260,7 @@ OUTER:
 		})
 
 		freeIntervals, err := s.calcFreeIntervals(ctx, goalID, currentDate, slotsForDay)
+		log.Printf("[AutoSchedule][%s] freeIntervals: %+v", currentDate.Format("2006-01-02"), freeIntervals)
 		if err != nil {
 			return totalScheduled, err
 		}
@@ -316,6 +336,8 @@ OUTER:
 			freeIntervals[fiIdx] = fi
 		}
 	}
+
+	log.Printf("[AutoSchedule] finished, totalScheduled=%d", totalScheduled)
 
 	return totalScheduled, nil
 }

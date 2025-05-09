@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"time"
 )
 
@@ -94,14 +95,19 @@ func (r repositoryImpl) CreateTimeSlot(ctx context.Context, slot *TimeSlot) erro
 	return nil
 }
 
-func (r repositoryImpl) ListTimeSlotsByAvailabilityIDs(ctx context.Context, avIDs []uuid.UUID) ([]TimeSlot, error) {
-	if len(avIDs) == 0 {
-		return []TimeSlot{}, nil
-	}
+func (r repositoryImpl) ListTimeSlotsByAvailabilityIDs(
+	ctx context.Context, avIDs []uuid.UUID,
+) ([]TimeSlot, error) {
 
-	query := `SELECT id, availability_id, start_time, end_time, created_at FROM time_slot WHERE availability_id = ANY ($1) ORDER BY start_time
-`
-	rows, err := r.db.QueryContext(ctx, query, pqArrayUUID(avIDs))
+	const query = `
+      SELECT id, availability_id, start_time, end_time,
+             created_at, updated_at
+      FROM time_slot
+      WHERE availability_id = ANY($1)
+      ORDER BY start_time
+    `
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(avIDs))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list time_slots: %w", err)
 	}
@@ -110,35 +116,19 @@ func (r repositoryImpl) ListTimeSlotsByAvailabilityIDs(ctx context.Context, avID
 	var result []TimeSlot
 	for rows.Next() {
 		var ts TimeSlot
-		var startStr, endStr string
 		if err := rows.Scan(
 			&ts.ID,
 			&ts.AvailabilityID,
 			&ts.StartTime,
 			&ts.EndTime,
-			&startStr,
-			&endStr,
+			&ts.CreatedAt,
+			&ts.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
-
-		st, _ := time.Parse("15:04:05", startStr)
-		et, _ := time.Parse("15:04:05", endStr)
-		ts.StartTime = st
-		ts.EndTime = et
-
 		result = append(result, ts)
 	}
-
 	return result, nil
-}
-
-func pqArrayUUID(list []uuid.UUID) []string {
-	out := make([]string, 0, len(list))
-	for _, id := range list {
-		out = append(out, id.String())
-	}
-	return out
 }
 
 func (r repositoryImpl) CreateScheduledTask(ctx context.Context, st *ScheduledTask) error {
