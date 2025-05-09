@@ -146,9 +146,6 @@ func (s *service) GetGoalByID(ctx context.Context, goalID uuid.UUID) (*dto.GoalR
 		ph.Status = calculatePhaseStatus(ph)
 	}
 
-	g.Progress = g.CalculateProgress(tasks)
-	g.Status = calculateGoalStatus(tasks)
-
 	_ = s.repo.UpdateGoal(ctx, g)
 
 	goalResp := s.toGoalResponse(g)
@@ -198,10 +195,6 @@ func (s *service) ListGoals(ctx context.Context, userID int64, req get.ListGoals
 			p.Progress = p.CalculateProgress(tasks)
 		}
 
-		g.Progress = g.CalculateProgress(tasks)
-
-		g.Status = calculateGoalStatus(tasks)
-
 		var nextTask *struct {
 			ID      uuid.UUID  `json:"id"`
 			Title   string     `json:"title"`
@@ -225,7 +218,7 @@ func (s *service) ListGoals(ctx context.Context, userID int64, req get.ListGoals
 			}
 		}
 
-		_ = s.repo.UpdateGoal(ctx, &g)
+		//_ = s.repo.UpdateGoal(ctx, &g)
 
 		listItems = append(listItems, get.ListGoalItem{
 			ID:           g.ID,
@@ -334,10 +327,10 @@ func (s *service) callOpenAIForDecomposition(title, description string, hoursPer
 }
 
 ВАЖНЫЕ ПРАВИЛА ДЛЯ ДЕКОМПОЗИЦИИ:
-1. Каждая задача должна быть конкретным действием, которое можно выполнить за 1-3 часа
-2. Задачи должны быть измеримыми и проверяемыми
+1. Каждая задача (task) должна быть конкретным действием, которое можно выполнить за 1-3 часа
+2. Задачи (task) должны быть измеримыми и проверяемыми
 3. Сумма времени всех задач в фазе НЕ ДОЛЖНА превышать estimated_time фазы
-4. Для первой фазы создавай задачи на первую неделю работы (не более 40 часов, оптимально 10-20)
+4. Для первой фазы создавай задачи на первую неделю работы
 5. Задачи должны быть последовательными и логически связанными
 6. Избегай слишком общих формулировок, используй конкретные действия
 7. Каждая задача должна иметь четкий результат

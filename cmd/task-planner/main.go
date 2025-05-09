@@ -11,6 +11,7 @@ import (
 	"task-planner/internal/db"
 	"task-planner/internal/email"
 	"task-planner/internal/goal"
+	"task-planner/internal/schedule"
 	"task-planner/internal/user"
 	"task-planner/migration"
 	"task-planner/pkg/config"
@@ -54,6 +55,10 @@ func main() {
 	goalService := goal.NewService(goalRepo, database, os.Getenv("OPENAI_API_KEY"))
 	goalHandler := goal.NewHandler(goalService)
 
+	scheduleRepo := schedule.NewRepository(database)
+	scheduleService := schedule.NewService(database, scheduleRepo, goalRepo)
+	scheduleHandler := schedule.NewHandler(scheduleService)
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -88,6 +93,20 @@ func main() {
 			r.Get("/", goalHandler.ListGoals)
 			r.Get("/{id}", goalHandler.GetGoal)
 		})
+
+		r.Route("/api/availability/{goal_id}", func(r chi.Router) {
+			r.Post("/", scheduleHandler.CreateOrUpdateAvailability)
+			r.Get("/", scheduleHandler.GetAvailability)
+			r.Post("/schedule", scheduleHandler.AutoSchedule)
+		})
+
+		r.Route("/api/schedule", func(r chi.Router) {
+			r.Get("/", scheduleHandler.GetSchedule)
+		})
+
+		r.Get("/api/tasks/upcoming", scheduleHandler.GetUpcomingTasks)
+
+		r.Get("/api/stats", scheduleHandler.GetStats)
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.AppPort)

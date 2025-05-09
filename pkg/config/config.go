@@ -67,6 +67,7 @@ func LoadConfig() (*Config, error) {
 	c.JWT.RefreshSecret = os.Getenv("JWT_REFRESH_SECRET")
 	c.JWT.AccessTTL = 15 * time.Minute
 	c.JWT.RefreshTTL = 24 * time.Hour * 7
+	c.JWT.GoogleClientID = os.Getenv("GOOGLE_CLIENT_ID")
 
 	return &c, nil
 }
