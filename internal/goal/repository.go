@@ -102,7 +102,7 @@ func (r *repositoryImpl) UpdateGoal(ctx context.Context, g *Goal) error {
 	query := `UPDATE goals
 			SET title = $2, description = $3, status = $4, estimated_time = $5, 
 				hours_per_week = $6, progress = $7, updated_at = $8
-			WHERE id = $
+			WHERE id = $1
 `
 	_, err := r.db.ExecContext(ctx, query,
 		g.ID,

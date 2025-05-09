@@ -38,7 +38,7 @@ func NewRepository(db *sql.DB) Repository {
 
 func (r *repositoryImpl) DeleteAvailabilityByGoal(ctx context.Context, goalID uuid.UUID) error {
 	query := `DELETE FROM availability WHERE goal_id = $1`
-	_, err := r.db.ExecContext(ctx, query)
+	_, err := r.db.ExecContext(ctx, query, goalID)
 	if err != nil {
 		return fmt.Errorf("failed to delete old availability: %w", err)
 	}
@@ -76,7 +76,7 @@ func (r repositoryImpl) ListAvailabilityByGoal(ctx context.Context, goalID uuid.
 }
 
 func (r repositoryImpl) CreateTimeSlot(ctx context.Context, slot *TimeSlot) error {
-	query := `INSERT INTO time_slot (id, availability_id, start_id, end_time, created_at, updated_at)
+	query := `INSERT INTO time_slot (id, availability_id, start_time, end_time, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 `
 	_, err := r.db.ExecContext(ctx, query,
