@@ -31,6 +31,9 @@ type TaskRepository interface {
 	ListTasksByGoalID(ctx context.Context, goalID uuid.UUID) ([]Task, error)
 	GetTasksByIDs(ctx context.Context, ids []uuid.UUID) ([]Task, error)
 	GetGoalsByIDs(ctx context.Context, ids []uuid.UUID) ([]Goal, error)
+
+	ListTasksByUserAndDate(ctx context.Context, userID int64, date time.Time) ([]Task, error)
+	ListUsersWithTasksOnDate(ctx context.Context, date time.Time) ([]int64, error)
 }
 
 type repositoryImpl struct {
@@ -370,4 +373,74 @@ func (r *repositoryImpl) GetGoalsByIDs(ctx context.Context, ids []uuid.UUID) ([]
 	}
 
 	return result, nil
+}
+
+func (r *repositoryImpl) ListTasksByUserAndDate(
+	ctx context.Context,
+	userID int64,
+	date time.Time,
+) ([]Task, error) {
+
+	query := `
+SELECT t.id, t.goal_id, t.phase_id, t.title, t.description, 
+       t.status, t.estimated_time, t.created_at, t.updated_at
+FROM tasks t
+JOIN goals g       ON g.id = t.goal_id             -- чтобы знать user_id
+JOIN scheduled_task st ON st.task_id = t.id
+WHERE g.user_id = $1
+  AND st.scheduled_date = $2
+ORDER BY st.start_time
+`
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
+		userID,
+		date.Format("2006-01-02"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query tasks by user/date: %w", err)
+	}
+	defer rows.Close()
+
+	var result []Task
+	for rows.Next() {
+		var t Task
+		if err := rows.Scan(
+			&t.ID, &t.GoalId, &t.PhaseId, &t.Title, &t.Description,
+			&t.Status, &t.EstimatedTime, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan task: %w", err)
+		}
+		result = append(result, t)
+	}
+	return result, nil
+}
+
+func (r *repositoryImpl) ListUsersWithTasksOnDate(
+	ctx context.Context,
+	date time.Time,
+) ([]int64, error) {
+
+	query := `
+SELECT DISTINCT g.user_id
+FROM scheduled_task  st
+JOIN tasks           t ON t.id = st.task_id
+JOIN goals           g ON g.id = t.goal_id
+WHERE st.scheduled_date = $1
+`
+	rows, err := r.db.QueryContext(ctx, query, date.Format("2006-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("query users with tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var users []int64
+	for rows.Next() {
+		var uid int64
+		if err := rows.Scan(&uid); err != nil {
+			return nil, fmt.Errorf("scan user_id: %w", err)
+		}
+		users = append(users, uid)
+	}
+	return users, nil
 }
