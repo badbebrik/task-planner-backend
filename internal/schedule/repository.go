@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"log"
 	"time"
 )
 
@@ -231,27 +232,28 @@ ORDER BY st.scheduled_date, st.start_time
 	var result []ScheduledTask
 	for rows.Next() {
 		var st ScheduledTask
-		var dateStr, stStr, etStr string
+		var dateOnly, timeStart, timeEnd time.Time
 		if err := rows.Scan(
 			&st.ID,
 			&st.TaskID,
 			&st.TimeSlotID,
-			&dateStr,
-			&stStr,
-			&etStr,
+			&dateOnly,
+			&timeStart,
+			&timeEnd,
 			&st.Status,
 			&st.CreatedAt,
 			&st.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
-		sd, _ := time.Parse("2006-01-02", dateStr)
-		stt, _ := time.Parse("15:04:05", stStr)
-		ett, _ := time.Parse("15:04:05", etStr)
+		log.Printf("[Repo][ListScheduledTasksInRange] raw dateStr=%q, startStr=%q, endStr=%q", dateOnly, startDate, endDate)
+		//sd, _ := time.Parse("2006-01-02", dateStr)
+		//stt, _ := time.Parse("15:04:05", stStr)
+		//ett, _ := time.Parse("15:04:05", etStr)
 
-		st.ScheduledDate = sd
-		st.StartTime = combineDateTime(sd, stt)
-		st.EndTime = combineDateTime(sd, ett)
+		st.ScheduledDate = dateOnly
+		st.StartTime = combineDateTime(dateOnly, timeStart)
+		st.EndTime = combineDateTime(dateOnly, timeEnd)
 
 		result = append(result, st)
 	}
