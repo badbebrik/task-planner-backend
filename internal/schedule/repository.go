@@ -169,7 +169,7 @@ func (r repositoryImpl) ListScheduledTasksForDate(ctx context.Context, date time
 	query := `SELECT st.id, st.task_id, st.time_slot_id, st.scheduled_date, st.start_time, st.end_time, st.status, st.created_at, st.updated_at
 		FROM scheduled_task st WHERE st.scheduled_date = $1 ORDER BY st.start_time
 `
-	rows, err := r.db.QueryContext(ctx, query, date.Format("2025-01-02"))
+	rows, err := r.db.QueryContext(ctx, query, date.Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list scheduled tasks for date: %w", err)
 	}
@@ -192,7 +192,7 @@ func (r repositoryImpl) ListScheduledTasksForDate(ctx context.Context, date time
 		); err != nil {
 			return nil, err
 		}
-		sd, _ := time.Parse("2025-01-02", dateStr)
+		sd, _ := time.Parse("2006-01-02", dateStr)
 		stt, _ := time.Parse("15:04:05", stStr)
 		ett, _ := time.Parse("15:04:05", etStr)
 
@@ -220,8 +220,8 @@ WHERE st.scheduled_date >= $1
 ORDER BY st.scheduled_date, st.start_time
 `
 	rows, err := r.db.QueryContext(ctx, query,
-		startDate.Format("2025-01-02"),
-		endDate.Format("2025-01-02"),
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list scheduled tasks in range: %w", err)
@@ -245,7 +245,7 @@ ORDER BY st.scheduled_date, st.start_time
 		); err != nil {
 			return nil, err
 		}
-		sd, _ := time.Parse("2025-01-02", dateStr)
+		sd, _ := time.Parse("2006-01-02", dateStr)
 		stt, _ := time.Parse("15:04:05", stStr)
 		ett, _ := time.Parse("15:04:05", etStr)
 
@@ -270,7 +270,7 @@ ORDER BY st.scheduled_date, st.start_time
 LIMIT %d
 `, limit)
 
-	rows, err := r.db.QueryContext(ctx, query, time.Now().Format("2025-01-02"))
+	rows, err := r.db.QueryContext(ctx, query, time.Now().Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list upcoming tasks: %w", err)
 	}
@@ -293,7 +293,7 @@ LIMIT %d
 		); err != nil {
 			return nil, err
 		}
-		sd, _ := time.Parse("2025-01-02", dateStr)
+		sd, _ := time.Parse("2006-01-02", dateStr)
 		stt, _ := time.Parse("15:04:05", stStr)
 		ett, _ := time.Parse("15:04:05", etStr)
 
@@ -318,8 +318,8 @@ WHERE scheduled_date >= $1
 GROUP BY scheduled_date
 `
 	rows, err := r.db.QueryContext(ctx, query,
-		startDate.Format("2025-01-02"),
-		endDate.Format("2025-01-02"),
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count tasks by day: %w", err)
@@ -333,7 +333,7 @@ GROUP BY scheduled_date
 		if err := rows.Scan(&dateStr, &completed, &total); err != nil {
 			return nil, err
 		}
-		dt, _ := time.Parse("2025-01-02", dateStr)
+		dt, _ := time.Parse("2006-01-02", dateStr)
 		result[dt] = struct{ Completed, Total int }{
 			Completed: completed,
 			Total:     total,
@@ -363,8 +363,8 @@ ORDER BY scheduled_date, start_time
 `
 	rows, err := r.db.QueryContext(ctx,
 		query,
-		startDate.Format("2025-01-02"),
-		endDate.Format("2025-01-02"),
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"),
 		goalID,
 	)
 	if err != nil {
@@ -389,7 +389,7 @@ ORDER BY scheduled_date, start_time
 			return nil, err
 		}
 
-		sd, _ := time.Parse("2025-01-02", dateStr)
+		sd, _ := time.Parse("2006-01-02", dateStr)
 		stt, _ := time.Parse("15:04:05", startStr)
 		ett, _ := time.Parse("15:04:05", endStr)
 
