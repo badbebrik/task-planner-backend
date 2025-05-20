@@ -22,6 +22,7 @@ type Service interface {
 	GetScheduleRange(ctx context.Context, startDate, endDate time.Time) (*dto.GetScheduleRangeResponse, error)
 	GetUpcomingTasks(ctx context.Context, limit int) (*dto.GetUpcomingTasksResponse, error)
 	GetStats(ctx context.Context) (*dto.GetStatsResponse, error)
+	ToggleScheduledTask(ctx context.Context, intervalID uuid.UUID, markDone bool) error
 }
 
 type service struct {
