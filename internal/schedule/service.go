@@ -28,13 +28,15 @@ type service struct {
 	db             *sql.DB
 	repo           Repository
 	taskRepository goal.TaskRepository
+	goalRepo       goal.RepositoryAggregator
 }
 
-func NewService(db *sql.DB, repo Repository, taskRepo goal.TaskRepository) Service {
+func NewService(db *sql.DB, repo Repository, taskRepo goal.TaskRepository, goalRepo goal.RepositoryAggregator) Service {
 	return &service{
 		db:             db,
 		repo:           repo,
 		taskRepository: taskRepo,
+		goalRepo:       goalRepo,
 	}
 }
 
@@ -655,4 +657,87 @@ func (s *service) loadTasksAndGoals(
 	}
 
 	return taskMap, goalMap, nil
+}
+
+func (s *service) ToggleScheduledTask(ctx context.Context, intervalID uuid.UUID, markDone bool) error {
+	newStatus := "scheduled"
+	if markDone {
+		newStatus = "completed"
+	}
+	if err := s.repo.UpdateScheduledTaskStatus(ctx, intervalID, newStatus); err != nil {
+		return err
+	}
+
+	st, err := s.repo.GetScheduledTaskByID(ctx, intervalID)
+	if err != nil {
+		return err
+	}
+
+	totalSpent, err := s.repo.SumDoneIntervalsForTask(ctx, st.TaskID)
+	if err != nil {
+		return err
+	}
+	if err := s.goalRepo.UpdateTaskTimeSpent(ctx, st.TaskID, totalSpent); err != nil {
+		return err
+	}
+
+	return s.recalcProgressCascade(ctx, st.TaskID)
+}
+
+func (s *service) recalcProgressCascade(ctx context.Context, taskID uuid.UUID) error {
+	t, err := s.goalRepo.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	progress := t.CalculateProgress()
+	switch progress {
+	case 0:
+		t.Status = "todo"
+	case 100:
+		t.Status = "completed"
+	default:
+		t.Status = "in_progress"
+	}
+	if err := s.goalRepo.UpdateTask(ctx, t); err != nil {
+		return err
+	}
+
+	allTasks, err := s.goalRepo.ListTasksByGoalID(ctx, t.GoalId)
+	if err != nil {
+		return err
+	}
+
+	if t.PhaseId != nil {
+		ph, err := s.goalRepo.GetPhaseByID(ctx, *t.PhaseId)
+		if err != nil {
+			return err
+		}
+		ph.Progress = ph.CalculateProgress(allTasks)
+		switch {
+		case ph.Progress == 0:
+			ph.Status = "not_started"
+		case ph.Progress == 100:
+			ph.Status = "completed"
+		default:
+			ph.Status = "in_progress"
+		}
+		if err := s.goalRepo.UpdatePhase(ctx, ph); err != nil {
+			return err
+		}
+	}
+
+	g, err := s.goalRepo.GetGoalByID(ctx, t.GoalId)
+	if err != nil {
+		return err
+	}
+	g.Progress = g.CalculateProgress(allTasks)
+	switch {
+	case g.Progress == 0:
+		g.Status = "planning"
+	case g.Progress == 100:
+		g.Status = "completed"
+	default:
+		g.Status = "active"
+	}
+	return s.goalRepo.UpdateGoal(ctx, g)
 }

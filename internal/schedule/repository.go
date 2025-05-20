@@ -28,6 +28,8 @@ type Repository interface {
 	CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]struct{ Completed, Total int }, error)
 
 	UpdateScheduledTaskStatus(ctx context.Context, id uuid.UUID, newStatus string) error
+	GetScheduledTaskByID(ctx context.Context, id uuid.UUID) (*ScheduledTask, error)
+	SumDoneIntervalsForTask(ctx context.Context, taskID uuid.UUID) (int, error)
 }
 
 type repositoryImpl struct {
@@ -425,4 +427,40 @@ func (r *repositoryImpl) UpdateScheduledTaskStatus(ctx context.Context, id uuid.
 		return fmt.Errorf("failed to update scheduled tasks status: %w", err)
 	}
 	return nil
+}
+
+func (r repositoryImpl) GetScheduledTaskByID(
+	ctx context.Context, id uuid.UUID,
+) (*ScheduledTask, error) {
+	q := `SELECT id, task_id, time_slot_id,
+	      scheduled_date, start_time, end_time, status, created_at, updated_at
+	      FROM scheduled_task WHERE id = $1`
+	var st ScheduledTask
+	var dateStr, stStr, etStr string
+	if err := r.db.QueryRowContext(ctx, q, id).Scan(
+		&st.ID, &st.TaskID, &st.TimeSlotID,
+		&dateStr, &stStr, &etStr, &st.Status, &st.CreatedAt, &st.UpdatedAt); err != nil {
+		return nil, err
+	}
+	sd, _ := time.Parse("2006-01-02", dateStr)
+	stt, _ := time.Parse("15:04:05", stStr)
+	ett, _ := time.Parse("15:04:05", etStr)
+	st.ScheduledDate = sd
+	st.StartTime = combineDateTime(sd, stt)
+	st.EndTime = combineDateTime(sd, ett)
+	return &st, nil
+}
+
+func (r repositoryImpl) SumDoneIntervalsForTask(
+	ctx context.Context, taskID uuid.UUID,
+) (int, error) {
+	q := `SELECT COALESCE(
+	          SUM( EXTRACT(EPOCH FROM (end_time - start_time))), 0)
+	      FROM scheduled_task
+	      WHERE task_id = $1 AND status = 'done'`
+	var min int
+	if err := r.db.QueryRowContext(ctx, q, taskID).Scan(&min); err != nil {
+		return 0, err
+	}
+	return min, nil
 }

@@ -21,6 +21,12 @@ type GoalRepository interface {
 	GetGoalByID(ctx context.Context, id uuid.UUID) (*Goal, error)
 	UpdateGoal(ctx context.Context, g *Goal) error
 	ListGoals(ctx context.Context, userID int64, limit, offset int, status string) ([]Goal, int, error)
+
+	GetPhaseByID(ctx context.Context, id uuid.UUID) (*Phase, error)
+	UpdatePhase(ctx context.Context, p *Phase) error
+	GetTaskByID(ctx context.Context, id uuid.UUID) (*Task, error)
+	UpdateTask(ctx context.Context, t *Task) error
+	UpdateTaskTimeSpent(ctx context.Context, id uuid.UUID, spent int) error
 }
 type PhaseRepository interface {
 	CreatePhase(ctx context.Context, p *Phase) error
@@ -370,4 +376,59 @@ func (r *repositoryImpl) GetGoalsByIDs(ctx context.Context, ids []uuid.UUID) ([]
 	}
 
 	return result, nil
+}
+
+func (r *repositoryImpl) GetTaskByID(ctx context.Context, id uuid.UUID) (*Task, error) {
+	q := `SELECT id, goal_id, phase_id, title, description, status,
+	             estimated_time, time_spent, completed_at, created_at, updated_at
+	      FROM tasks WHERE id = $1`
+	var t Task
+	var phaseID *uuid.UUID
+	if err := r.db.QueryRowContext(ctx, q, id).Scan(
+		&t.ID, &t.GoalId, &phaseID, &t.Title, &t.Description,
+		&t.Status, &t.EstimatedTime, &t.TimeSpent,
+		&t.CompletedAt, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		return nil, err
+	}
+	t.PhaseId = phaseID
+	return &t, nil
+}
+
+func (r *repositoryImpl) UpdateTask(ctx context.Context, t *Task) error {
+	t.UpdatedAt = time.Now()
+	_, err := r.db.ExecContext(ctx, `
+	    UPDATE tasks
+	    SET status = $2, time_spent = $3, completed_at = $4, updated_at = $5
+	    WHERE id = $1`,
+		t.ID, t.Status, t.TimeSpent, t.CompletedAt, t.UpdatedAt)
+	return err
+}
+
+func (r *repositoryImpl) UpdateTaskTimeSpent(ctx context.Context, id uuid.UUID, spent int) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE tasks SET time_spent = $2, updated_at = NOW() WHERE id = $1`, id, spent)
+	return err
+}
+
+func (r *repositoryImpl) GetPhaseByID(ctx context.Context, id uuid.UUID) (*Phase, error) {
+	q := `SELECT id, goal_id, title, description, status,
+	             estimated_time, progress, "order", created_at, updated_at
+	      FROM phases WHERE id = $1`
+	var p Phase
+	if err := r.db.QueryRowContext(ctx, q, id).Scan(
+		&p.ID, &p.GoalId, &p.Title, &p.Description, &p.Status,
+		&p.EstimatedTime, &p.Progress, &p.Order, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *repositoryImpl) UpdatePhase(ctx context.Context, p *Phase) error {
+	p.UpdatedAt = time.Now()
+	_, err := r.db.ExecContext(ctx, `
+	    UPDATE phases
+	    SET status = $2, progress = $3, updated_at = $4
+	    WHERE id = $1`,
+		p.ID, p.Status, p.Progress, p.UpdatedAt)
+	return err
 }
