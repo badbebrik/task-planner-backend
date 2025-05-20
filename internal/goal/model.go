@@ -46,26 +46,46 @@ type Task struct {
 }
 
 func (p *Phase) CalculateProgress(tasks []Task) int {
-	timeSpent := 0
+	spent := 0
 	for _, t := range tasks {
-		if t.PhaseId != nil && *t.PhaseId == p.ID && t.Status == "completed" {
-			timeSpent += t.EstimatedTime
+		if t.PhaseId != nil && *t.PhaseId == p.ID {
+			spent += t.TimeSpent
 		}
 	}
-	// BUG: fix estimated time query to llm
-	//return timeSpent / p.EstimatedTime * 100
-	return timeSpent
+	if p.EstimatedTime == 0 {
+		return 0
+	}
+	perc := spent * 100 / p.EstimatedTime
+	if perc > 100 {
+		perc = 100
+	}
+	return perc
 }
 
 func (g *Goal) CalculateProgress(tasks []Task) int {
-	timeSpent := 0
+	spent := 0
 	for _, t := range tasks {
-		if t.GoalId == g.ID && t.Status == "completed" {
-			timeSpent += t.EstimatedTime
+		if t.GoalId == g.ID {
+			spent += t.TimeSpent
 		}
 	}
+	if g.EstimatedTime == 0 {
+		return 0
+	}
+	perc := spent * 100 / g.EstimatedTime
+	if perc > 100 {
+		perc = 100
+	}
+	return perc
+}
 
-	result := max(timeSpent/g.EstimatedTime*100, 100)
-
-	return result
+func (t *Task) CalculateProgress() int {
+	if t.EstimatedTime == 0 {
+		return 0
+	}
+	p := t.TimeSpent * 100 / t.EstimatedTime
+	if p > 100 {
+		p = 100
+	}
+	return p
 }
