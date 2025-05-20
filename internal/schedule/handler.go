@@ -2,6 +2,7 @@ package schedule
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"task-planner/internal/schedule/dto"
@@ -30,11 +31,14 @@ func (h *Handler) CreateOrUpdateAvailability(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	fmt.Println(r)
+
 	var req dto.UpdateAvailabilityRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
+	fmt.Println(req)
 
 	resp, err := h.service.UpdateAvailability(r.Context(), goalID, req)
 	if err != nil {

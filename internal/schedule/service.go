@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"log"
 	"sort"
 	"task-planner/internal/goal"
 	"task-planner/internal/schedule/dto"
@@ -192,16 +193,18 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 	}()
 
 	tasks, err := s.taskRepository.ListTasksByGoalID(ctx, goalID)
+	log.Printf("[AutoSchedule] total tasks from repo: %d", len(tasks))
 	if err != nil {
 		return 0, fmt.Errorf("list tasks: %w", err)
 	}
 
 	var tasksToSchedule []plannedTask
 	for _, t := range tasks {
+		log.Printf("[AutoSchedule] task %s status=%q est=%d", t.ID, t.Status, t.EstimatedTime)
 		if t.Status != "todo" {
 			continue
 		}
-		toPlanMinutes := t.EstimatedTime
+		toPlanMinutes := t.EstimatedTime * 60
 		if toPlanMinutes <= 0 {
 			continue
 		}
@@ -215,10 +218,22 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 	}
 
 	avList, err := s.repo.ListAvailabilityByGoal(ctx, goalID)
+	log.Printf("[AutoSchedule] availability for goal %s: %+v", goalID, avList)
+
 	if err != nil {
 		return 0, fmt.Errorf("list availability: %w", err)
 	}
 	daySlotsMap, err := s.loadSlotsByDayOfWeek(ctx, avList)
+	for dow, slots := range daySlotsMap {
+		log.Printf("[AutoSchedule] dow=%d slotsCount=%d", dow, len(slots))
+		for _, slot := range slots {
+			log.Printf("  [Slot] id=%s start=%s end=%s",
+				slot.ID,
+				slot.StartTime.Format("15:04"),
+				slot.EndTime.Format("15:04"))
+		}
+	}
+
 	if err != nil {
 		return 0, err
 	}
@@ -231,8 +246,12 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 OUTER:
 	for dayOffset := 0; dayOffset < horizon; dayOffset++ {
 		currentDate := today.AddDate(0, 0, dayOffset)
-		dw := int(currentDate.Weekday())
-		slotsForDay := daySlotsMap[dw]
+		dow := int(currentDate.Weekday())
+		slotsForDay := daySlotsMap[dow]
+
+		log.Printf("[AutoSchedule] checking date %s (dow=%d), slotsForDay=%d",
+			currentDate.Format("2006-01-02"), dow, len(slotsForDay))
+
 		if len(slotsForDay) == 0 {
 			continue
 		}
@@ -241,6 +260,7 @@ OUTER:
 		})
 
 		freeIntervals, err := s.calcFreeIntervals(ctx, goalID, currentDate, slotsForDay)
+		log.Printf("[AutoSchedule][%s] freeIntervals: %+v", currentDate.Format("2006-01-02"), freeIntervals)
 		if err != nil {
 			return totalScheduled, err
 		}
@@ -316,6 +336,8 @@ OUTER:
 			freeIntervals[fiIdx] = fi
 		}
 	}
+
+	log.Printf("[AutoSchedule] finished, totalScheduled=%d", totalScheduled)
 
 	return totalScheduled, nil
 }
@@ -466,18 +488,23 @@ func dateOnly(t time.Time) time.Time {
 }
 
 func (s *service) GetScheduleForDay(ctx context.Context, date time.Time) (*dto.GetScheduleForDayResponse, error) {
+	log.Printf("[GetScheduleForDay] called with date=%s", date.Format("2006-01-02"))
 	scheduledList, err := s.repo.ListScheduledTasksInRange(ctx, date, date)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list scheduled tasks for day: %w", err)
 	}
+	log.Printf("[GetScheduleForDay] scheduledList.len=%d items=%+v",
+		len(scheduledList), scheduledList)
 
 	tasksMap, goalsMap, err := s.loadTasksAndGoals(ctx, scheduledList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load tasks/goals: %w", err)
 	}
 
-	var items []dto.ScheduledTaskDTO
+	items := make([]dto.ScheduledTaskDTO, 0)
 	for _, st := range scheduledList {
+		log.Printf("[GetScheduleForDay] processing st.ID=%s, st.TaskID=%s, st.StartTime=%s, st.EndTime=%s",
+			st.ID, st.TaskID, st.StartTime.Format("15:04"), st.EndTime.Format("15:04"))
 		t := tasksMap[st.TaskID]
 		g := goalsMap[t.GoalId]
 
@@ -491,8 +518,9 @@ func (s *service) GetScheduleForDay(ctx context.Context, date time.Time) (*dto.G
 		})
 	}
 
+	log.Printf("[GetScheduleForDay] returning %d tasks", len(items))
 	resp := &dto.GetScheduleForDayResponse{
-		Date:  date.Format("2025-01-02"),
+		Date:  date.Format("2006-01-02"),
 		Tasks: items,
 	}
 	return resp, nil
@@ -511,7 +539,7 @@ func (s *service) GetScheduleRange(ctx context.Context, startDate, endDate time.
 
 	grouped := make(map[string][]dto.ScheduledTaskDTO)
 	for _, st := range scheduledList {
-		dateKey := st.ScheduledDate.Format("2025-01-02")
+		dateKey := st.ScheduledDate.Format("2006-01-02")
 
 		t := tasksMap[st.TaskID]
 		g := goalsMap[t.GoalId]
@@ -526,9 +554,9 @@ func (s *service) GetScheduleRange(ctx context.Context, startDate, endDate time.
 		})
 	}
 
-	var scheduleResult []dto.DaySchedule
+	scheduleResult := make([]dto.DaySchedule, 0)
 	for d := startDate; !d.After(endDate); d = d.AddDate(0, 0, 1) {
-		dateKey := d.Format("2025-01-02")
+		dateKey := d.Format("2006-01-02")
 		tasks := grouped[dateKey]
 		scheduleResult = append(scheduleResult, dto.DaySchedule{
 			Date:  dateKey,
@@ -563,7 +591,7 @@ func (s *service) GetUpcomingTasks(ctx context.Context, limit int) (*dto.GetUpco
 			ID:            st.ID,
 			GoalTitle:     g.Title,
 			Title:         t.Title,
-			ScheduledDate: st.ScheduledDate.Format("2025-01-02"),
+			ScheduledDate: st.ScheduledDate.Format("2006-01-02"),
 			StartTime:     st.StartTime.Format("15:04"),
 		})
 	}
