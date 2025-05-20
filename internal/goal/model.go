@@ -39,6 +39,7 @@ type Task struct {
 	Description   string     `json:"description"`
 	Status        string     `json:"status"` // "todo", "in_progress", "completed"
 	EstimatedTime int        `json:"estimated_time"`
+	TimeSpent     int        `json:"time_spent"`
 	CompletedAt   *time.Time `json:"completed_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
