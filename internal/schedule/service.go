@@ -25,18 +25,16 @@ type Service interface {
 }
 
 type service struct {
-	db             *sql.DB
-	repo           Repository
-	taskRepository goal.TaskRepository
-	goalRepo       goal.RepositoryAggregator
+	db       *sql.DB
+	repo     Repository
+	goalRepo goal.RepositoryAggregator
 }
 
-func NewService(db *sql.DB, repo Repository, taskRepo goal.TaskRepository, goalRepo goal.RepositoryAggregator) Service {
+func NewService(db *sql.DB, repo Repository, goalRepo goal.RepositoryAggregator) Service {
 	return &service{
-		db:             db,
-		repo:           repo,
-		taskRepository: taskRepo,
-		goalRepo:       goalRepo,
+		db:       db,
+		repo:     repo,
+		goalRepo: goalRepo,
 	}
 }
 
@@ -193,7 +191,7 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 		}
 	}()
 
-	tasks, err := s.taskRepository.ListTasksByGoalID(ctx, goalID)
+	tasks, err := s.goalRepo.ListTasksByGoalID(ctx, goalID)
 	if err != nil {
 		return 0, fmt.Errorf("list tasks: %w", err)
 	}
@@ -629,7 +627,7 @@ func (s *service) loadTasksAndGoals(
 		ids = append(ids, id)
 	}
 
-	tasks, err := s.taskRepository.GetTasksByIDs(ctx, ids)
+	tasks, err := s.goalRepo.GetTasksByIDs(ctx, ids)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load tasks: %w", err)
 	}
@@ -646,7 +644,7 @@ func (s *service) loadTasksAndGoals(
 		gIDs = append(gIDs, id)
 	}
 
-	goals, err := s.taskRepository.GetGoalsByIDs(ctx, gIDs)
+	goals, err := s.goalRepo.GetGoalsByIDs(ctx, gIDs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load goals: %w", err)
 	}
