@@ -26,6 +26,8 @@ type Repository interface {
 
 	// todo: дополнить для статы или выкинуть нафиг
 	CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]struct{ Completed, Total int }, error)
+
+	UpdateScheduledTaskStatus(ctx context.Context, id uuid.UUID, newStatus string) error
 }
 
 type repositoryImpl struct {
@@ -411,4 +413,16 @@ ORDER BY scheduled_date, start_time
 	}
 
 	return result, nil
+}
+
+func (r *repositoryImpl) UpdateScheduledTaskStatus(ctx context.Context, id uuid.UUID, newStatus string) error {
+	query := ` UPDATE scheduled_task
+			 SET status = $2, updated_at = now()
+			 WHERE id = $1;
+`
+	_, err := r.db.ExecContext(ctx, query, newStatus, id)
+	if err != nil {
+		return fmt.Errorf("failed to update scheduled tasks status: %w", err)
+	}
+	return nil
 }
