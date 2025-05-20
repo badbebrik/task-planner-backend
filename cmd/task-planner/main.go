@@ -92,6 +92,7 @@ func main() {
 			r.Post("/", goalHandler.CreateGoal)
 			r.Get("/", goalHandler.ListGoals)
 			r.Get("/{id}", goalHandler.GetGoal)
+			r.Delete("/goals/{id}", goalHandler.DeleteGoal)
 		})
 
 		r.Route("/api/availability/{goal_id}", func(r chi.Router) {
@@ -107,6 +108,8 @@ func main() {
 		r.Get("/api/tasks/upcoming", scheduleHandler.GetUpcomingTasks)
 
 		r.Get("/api/stats", scheduleHandler.GetStats)
+
+		r.Patch("/scheduled_tasks/{id}", scheduleHandler.ToggleInterval)
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.AppPort)

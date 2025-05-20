@@ -19,6 +19,7 @@ type Service interface {
 	GetGoalByID(ctx context.Context, goalID uuid.UUID) (*dto.GoalResponse, error)
 	ListGoals(ctx context.Context, userID int64, req get.ListGoalsRequest) (*get.ListGoalsResponse, error)
 	GenerateGoalDecomposition(ctx context.Context, userID int64, req generate.GenerateGoalRequest) (*generate.GenerateGoalResponse, error)
+	DeleteGoal(ctx context.Context, goalID uuid.UUID) error
 }
 
 type service struct {
@@ -379,22 +380,8 @@ func (s *service) callOpenAIForDecomposition(title, description string, hoursPer
 	return &result.Goal, nil
 }
 
-// TODO: Переделать, щас заглушка
-func calculateGoalStatus(tasks []Task) string {
-	var total, completed int
-	for _, t := range tasks {
-		total++
-		if t.Status == "completed" {
-			completed++
-		}
-	}
-	if total == 0 {
-		return "planning"
-	}
-	if completed == total {
-		return "completed"
-	}
-	return "active"
+func (s *service) DeleteGoal(ctx context.Context, goalID uuid.UUID) error {
+	return s.repo.DeleteGoal(ctx, goalID)
 }
 
 func calculatePhaseStatus(p *Phase) string {

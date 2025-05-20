@@ -130,3 +130,24 @@ func (h *Handler) GetGoal(w http.ResponseWriter, r *http.Request) {
 		"goal": goalResp,
 	})
 }
+
+func (h *Handler) DeleteGoal(w http.ResponseWriter, r *http.Request) {
+	goalID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "Invalid goal ID", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := auth.GetUserFromContext(r.Context()); err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.service.DeleteGoal(r.Context(), goalID); err != nil {
+		log.Printf("[GOAL] delete failed: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

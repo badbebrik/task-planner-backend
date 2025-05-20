@@ -27,6 +27,7 @@ type GoalRepository interface {
 	GetTaskByID(ctx context.Context, id uuid.UUID) (*Task, error)
 	UpdateTask(ctx context.Context, t *Task) error
 	UpdateTaskTimeSpent(ctx context.Context, id uuid.UUID, spent int) error
+	DeleteGoal(ctx context.Context, id uuid.UUID) error
 }
 type PhaseRepository interface {
 	CreatePhase(ctx context.Context, p *Phase) error
@@ -430,5 +431,10 @@ func (r *repositoryImpl) UpdatePhase(ctx context.Context, p *Phase) error {
 	    SET status = $2, progress = $3, updated_at = $4
 	    WHERE id = $1`,
 		p.ID, p.Status, p.Progress, p.UpdatedAt)
+	return err
+}
+
+func (r *repositoryImpl) DeleteGoal(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM goals WHERE id = $1`, id)
 	return err
 }
