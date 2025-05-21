@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/robfig/cron"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"task-planner/internal/db"
 	"task-planner/internal/email"
 	"task-planner/internal/goal"
+	"task-planner/internal/motivation"
 	"task-planner/internal/schedule"
 	"task-planner/internal/user"
 	"task-planner/migration"
@@ -58,6 +61,18 @@ func main() {
 	scheduleRepo := schedule.NewRepository(database)
 	scheduleService := schedule.NewService(database, scheduleRepo, goalRepo)
 	scheduleHandler := schedule.NewHandler(scheduleService)
+
+	motivationRepo := motivation.NewRepository(database)
+	motivationService := motivation.NewService(motivationRepo, goalRepo, os.Getenv("OPENAI_API_KEY"))
+	motivationHandler := motivation.NewHandler(motivationService)
+
+	c := cron.New()
+	c.AddFunc("0 7 * * *", func() {
+		if err := motivationService.GenerateDailyMotivations(context.Background()); err != nil {
+			log.Printf("GenerateDailyMotivations error: %v", err)
+		}
+	})
+	c.Start()
 
 	r := chi.NewRouter()
 
@@ -110,6 +125,11 @@ func main() {
 		r.Get("/api/stats", scheduleHandler.GetStats)
 
 		r.Patch("/scheduled_tasks/{id}", scheduleHandler.ToggleInterval)
+
+		r.Group(func(r chi.Router) {
+			r.Use(auth.JWTAuthMiddleware(cfg.JWT.AccessSecret))
+			r.Get("/api/motivation/today", motivationHandler.GetToday)
+		})
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.AppPort)
