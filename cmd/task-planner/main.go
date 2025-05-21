@@ -14,6 +14,7 @@ import (
 	"task-planner/internal/email"
 	"task-planner/internal/goal"
 	"task-planner/internal/motivation"
+	"task-planner/internal/refill"
 	"task-planner/internal/schedule"
 	"task-planner/internal/user"
 	"task-planner/migration"
@@ -65,6 +66,7 @@ func main() {
 	motivationRepo := motivation.NewRepository(database)
 	motivationService := motivation.NewService(motivationRepo, goalRepo, os.Getenv("OPENAI_API_KEY"))
 	motivationHandler := motivation.NewHandler(motivationService)
+	refillWorker := refill.NewWorker(goalRepo, goalService, scheduleService)
 
 	c := cron.New()
 	c.AddFunc("0 7 * * *", func() {
@@ -72,6 +74,13 @@ func main() {
 			log.Printf("GenerateDailyMotivations error: %v", err)
 		}
 	})
+
+	c.AddFunc("0 */4 * * *", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		refillWorker.Tick(ctx)
+	})
+
 	c.Start()
 
 	r := chi.NewRouter()

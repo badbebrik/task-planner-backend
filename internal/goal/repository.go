@@ -28,10 +28,16 @@ type GoalRepository interface {
 	UpdateTask(ctx context.Context, t *Task) error
 	UpdateTaskTimeSpent(ctx context.Context, id uuid.UUID, spent int) error
 	DeleteGoal(ctx context.Context, id uuid.UUID) error
+
+	CountPendingTasks(ctx context.Context, phaseID uuid.UUID) (int, error)
+	ListActiveGoals(ctx context.Context) ([]Goal, error)
 }
 type PhaseRepository interface {
 	CreatePhase(ctx context.Context, p *Phase) error
 	ListPhasesByGoalID(ctx context.Context, goalID uuid.UUID) ([]Phase, error)
+	SumTimeSpentPhase(
+		ctx context.Context, phaseID uuid.UUID,
+	) (int, error)
 }
 type TaskRepository interface {
 	CreateTask(ctx context.Context, t *Task) error
@@ -40,6 +46,9 @@ type TaskRepository interface {
 	GetGoalsByIDs(ctx context.Context, ids []uuid.UUID) ([]Goal, error)
 	ListTasksByUserAndDate(ctx context.Context, userID int64, date time.Time) ([]Task, error)
 	ListUsersWithTasksOnDate(ctx context.Context, date time.Time) ([]int64, error)
+	ListDoneTasksSince(
+		ctx context.Context, phaseID uuid.UUID, since time.Time,
+	) ([]Task, error)
 }
 
 type repositoryImpl struct {
@@ -451,7 +460,7 @@ func (r *repositoryImpl) ListTasksByUserAndDate(
 SELECT t.id, t.goal_id, t.phase_id, t.title, t.description, 
        t.status, t.estimated_time, t.created_at, t.updated_at
 FROM tasks t
-JOIN goals g       ON g.id = t.goal_id             -- чтобы знать user_id
+JOIN goals g       ON g.id = t.goal_id  
 JOIN scheduled_task st ON st.task_id = t.id
 WHERE g.user_id = $1
   AND st.scheduled_date = $2
@@ -509,4 +518,78 @@ WHERE st.scheduled_date = $1
 		users = append(users, uid)
 	}
 	return users, nil
+}
+
+func (r *repositoryImpl) ListDoneTasksSince(
+	ctx context.Context, phaseID uuid.UUID, since time.Time,
+) ([]Task, error) {
+
+	rows, err := r.db.QueryContext(ctx, `
+        SELECT id, goal_id, phase_id, title, description,
+               estimated_time, time_spent, completed_at
+        FROM tasks
+        WHERE phase_id = $1 AND status = 'completed' AND completed_at >= $2`,
+		phaseID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []Task
+	for rows.Next() {
+		var t Task
+		_ = rows.Scan(&t.ID, &t.GoalId, &t.PhaseId, &t.Title,
+			&t.Description, &t.EstimatedTime, &t.TimeSpent, &t.CompletedAt)
+		res = append(res, t)
+	}
+	return res, nil
+}
+
+func (r *repositoryImpl) SumTimeSpentPhase(
+	ctx context.Context, phaseID uuid.UUID,
+) (int, error) {
+	var hours int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(time_spent),0) FROM tasks WHERE phase_id=$1`, phaseID).
+		Scan(&hours)
+	return hours, err
+}
+
+func (r *repositoryImpl) CountPendingTasks(
+	ctx context.Context, phaseID uuid.UUID,
+) (int, error) {
+	var cnt int
+	err := r.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM tasks WHERE phase_id = $1 AND status = 'todo'`,
+		phaseID,
+	).Scan(&cnt)
+	return cnt, err
+}
+
+func (r *repositoryImpl) ListActiveGoals(
+	ctx context.Context,
+) ([]Goal, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, user_id, title, description, status,
+		        estimated_time, hours_per_week, progress,
+		        created_at, updated_at
+		   FROM goals
+		  WHERE status = 'active'`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []Goal
+	for rows.Next() {
+		var g Goal
+		_ = rows.Scan(
+			&g.ID, &g.UserId, &g.Title, &g.Description, &g.Status,
+			&g.EstimatedTime, &g.HoursPerWeek, &g.Progress,
+			&g.CreatedAt, &g.UpdatedAt,
+		)
+		res = append(res, g)
+	}
+	return res, nil
 }
