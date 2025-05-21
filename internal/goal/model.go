@@ -19,16 +19,18 @@ type Goal struct {
 }
 
 type Phase struct {
-	ID            uuid.UUID `json:"id"`
-	GoalId        uuid.UUID `json:"goalId"`
-	Title         string    `json:"title"`
-	Description   string    `json:"description"`
-	Status        string    `json:"status"` // "not_started", "in_progress", "completed"
-	EstimatedTime int       `json:"estimated_time"`
-	Progress      int       `json:"progress"`
-	Order         int       `json:"order"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            uuid.UUID  `json:"id"`
+	GoalId        uuid.UUID  `json:"goalId"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description"`
+	Status        string     `json:"status"` // "not_started", "in_progress", "completed"
+	EstimatedTime int        `json:"estimated_time"`
+	Progress      int        `json:"progress"`
+	Order         int        `json:"order"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	StartedAt     *time.Time `json:"started_at,omitempty"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
 }
 
 type Task struct {
@@ -88,4 +90,18 @@ func (t *Task) CalculateProgress() int {
 		p = 100
 	}
 	return p
+}
+
+func (p *Phase) markStarted() {
+	if p.StartedAt == nil {
+		now := time.Now()
+		p.StartedAt = &now
+	}
+}
+
+func (p *Phase) markCompleted() {
+	if p.CompletedAt == nil {
+		now := time.Now()
+		p.CompletedAt = &now
+	}
 }
