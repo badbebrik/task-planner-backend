@@ -428,9 +428,9 @@ func (r *repositoryImpl) UpdatePhase(ctx context.Context, p *Phase) error {
 	p.UpdatedAt = time.Now()
 	_, err := r.db.ExecContext(ctx, `
 	    UPDATE phases
-	    SET status = $2, progress = $3, updated_at = $4
+	    SET status = $2, progress = $3, updated_at = $4, started_at = $5, completed_at = $6
 	    WHERE id = $1`,
-		p.ID, p.Status, p.Progress, p.UpdatedAt)
+		p.ID, p.Status, p.Progress, p.UpdatedAt, p.StartedAt, p.CompletedAt)
 	return err
 }
 

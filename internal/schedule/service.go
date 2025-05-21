@@ -717,8 +717,10 @@ func (s *service) recalcProgressCascade(ctx context.Context, taskID uuid.UUID) e
 			ph.Status = "not_started"
 		case ph.Progress == 100:
 			ph.Status = "completed"
+			ph.MarkCompleted()
 		default:
 			ph.Status = "in_progress"
+			ph.MarkStarted()
 		}
 		if err := s.goalRepo.UpdatePhase(ctx, ph); err != nil {
 			return err

@@ -92,14 +92,14 @@ func (t *Task) CalculateProgress() int {
 	return p
 }
 
-func (p *Phase) markStarted() {
+func (p *Phase) MarkStarted() {
 	if p.StartedAt == nil {
 		now := time.Now()
 		p.StartedAt = &now
 	}
 }
 
-func (p *Phase) markCompleted() {
+func (p *Phase) MarkCompleted() {
 	if p.CompletedAt == nil {
 		now := time.Now()
 		p.CompletedAt = &now
