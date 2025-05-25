@@ -414,7 +414,7 @@ func (r *repositoryImpl) UpdateScheduledTaskStatus(ctx context.Context, id uuid.
 			 SET status = $2, updated_at = now()
 			 WHERE id = $1;
 `
-	_, err := r.db.ExecContext(ctx, query, newStatus, id)
+	_, err := r.db.ExecContext(ctx, query, id, newStatus)
 	if err != nil {
 		return fmt.Errorf("failed to update scheduled tasks status: %w", err)
 	}

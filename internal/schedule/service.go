@@ -338,6 +338,14 @@ OUTER:
 		}
 	}
 
+	if totalScheduled > 0 {
+		g, _ := s.goalRepo.GetGoalByID(ctx, goalID)
+		if g.Status == "planning" {
+			g.Status = "active"
+			_ = s.goalRepo.UpdateGoal(ctx, g)
+		}
+	}
+
 	log.Printf("[AutoSchedule] finished, totalScheduled=%d", totalScheduled)
 
 	return totalScheduled, nil

@@ -116,7 +116,7 @@ func main() {
 			r.Post("/", goalHandler.CreateGoal)
 			r.Get("/", goalHandler.ListGoals)
 			r.Get("/{id}", goalHandler.GetGoal)
-			r.Delete("/goals/{id}", goalHandler.DeleteGoal)
+			r.Delete("/{id}", goalHandler.DeleteGoal)
 		})
 
 		r.Route("/api/availability/{goal_id}", func(r chi.Router) {
@@ -133,7 +133,7 @@ func main() {
 
 		r.Get("/api/stats", scheduleHandler.GetStats)
 
-		r.Patch("/scheduled_tasks/{id}", scheduleHandler.ToggleInterval)
+		r.Patch("/api/scheduled_tasks/{id}", scheduleHandler.ToggleInterval)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.JWTAuthMiddleware(cfg.JWT.AccessSecret))

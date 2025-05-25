@@ -1,15 +1,39 @@
 version: "3.8"
+
 services:
   db:
     image: postgres:17-alpine
-    container_name: auth_service_db
-    ports:
-      - "5432:5432"
+    container_name: task_planner_db
+    env_file: .env
     environment:
-      POSTGRES_USER: username
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: auth_service
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: >
+        pg_isready
+        -h localhost
+        -p 5432
+        -U ${DB_USER}
+        -d ${DB_NAME}
+      interval: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "5432:5432"
+
+  app:
+    build: .
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./migration:/app/migration:ro
+
 volumes:
   db_data:
