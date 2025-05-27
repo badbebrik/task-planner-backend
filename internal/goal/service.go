@@ -74,15 +74,16 @@ func (s *service) CreateGoal(ctx context.Context, userID int64, req create.Creat
 	for i, phaseReq := range req.Phases {
 		phaseID := uuid.New()
 		phase := &Phase{
-			ID:          phaseID,
-			GoalId:      goalID,
-			Title:       phaseReq.Title,
-			Description: phaseReq.Description,
-			Status:      "not_started",
-			Progress:    0,
-			Order:       phaseReq.Order,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			ID:            phaseID,
+			GoalId:        goalID,
+			Title:         phaseReq.Title,
+			Description:   phaseReq.Description,
+			Status:        "not_started",
+			EstimatedTime: phaseReq.EstimatedTime,
+			Progress:      0,
+			Order:         phaseReq.Order,
+			CreatedAt:     now,
+			UpdatedAt:     now,
 		}
 		if phase.Order == 0 {
 			phase.Order = i + 1

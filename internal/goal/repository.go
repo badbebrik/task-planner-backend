@@ -203,8 +203,8 @@ func (r *repositoryImpl) ListGoals(
 
 func (r *repositoryImpl) CreatePhase(ctx context.Context, p *Phase) error {
 	query := `
-INSERT INTO phases (id, goal_id, title, description, status, progress, "order",created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO phases (id, goal_id, title, description, status, progress, estimated_time, "order",created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 `
 	_, err := r.db.ExecContext(ctx, query,
 		p.ID,
@@ -213,6 +213,7 @@ INSERT INTO phases (id, goal_id, title, description, status, progress, "order",c
 		p.Description,
 		p.Status,
 		p.Progress,
+		p.EstimatedTime,
 		p.Order,
 		p.CreatedAt,
 		p.UpdatedAt,
@@ -224,7 +225,7 @@ INSERT INTO phases (id, goal_id, title, description, status, progress, "order",c
 }
 
 func (r *repositoryImpl) ListPhasesByGoalID(ctx context.Context, goalID uuid.UUID) ([]Phase, error) {
-	query := `SELECT id, goal_id, title, description, status, progress, "order",
+	query := `SELECT id, goal_id, title, description, status, progress, estimated_time, "order",
     			created_at, updated_at FROM phases WHERE goal_id = $1
 				ORDER BY "order" ASC
 `
@@ -244,6 +245,7 @@ func (r *repositoryImpl) ListPhasesByGoalID(ctx context.Context, goalID uuid.UUI
 			&p.Description,
 			&p.Status,
 			&p.Progress,
+			&p.EstimatedTime,
 			&p.Order,
 			&p.CreatedAt,
 			&p.UpdatedAt,
@@ -280,7 +282,7 @@ INSERT INTO tasks (id, goal_id, phase_id, title, description, status, estimated_
 }
 
 func (r *repositoryImpl) ListTasksByGoalID(ctx context.Context, goalID uuid.UUID) ([]Task, error) {
-	query := `SELECT id, goal_id, phase_id, title, description, status, estimated_time, 
+	query := `SELECT id, goal_id, phase_id, title, description, status, estimated_time, time_spent, 
     		completed_at, created_at, updated_at FROM tasks WHERE goal_id = $1
 			ORDER BY created_at ASC
 `
@@ -301,6 +303,7 @@ func (r *repositoryImpl) ListTasksByGoalID(ctx context.Context, goalID uuid.UUID
 			&t.Description,
 			&t.Status,
 			&t.EstimatedTime,
+			&t.TimeSpent,
 			&t.CompletedAt,
 			&t.CreatedAt,
 			&t.UpdatedAt,
@@ -324,7 +327,7 @@ func (r *repositoryImpl) GetTasksByIDs(ctx context.Context, ids []uuid.UUID) ([]
 		args[i] = id
 	}
 	query := fmt.Sprintf(`
-        SELECT id, goal_id, phase_id, title, description, status, estimated_time, created_at, updated_at
+        SELECT id, goal_id, phase_id, title, description, status, estimated_time, time_spent, created_at, updated_at
         FROM tasks
         WHERE id IN (%s)
     `, strings.Join(placeholders, ", "))
@@ -340,7 +343,7 @@ func (r *repositoryImpl) GetTasksByIDs(ctx context.Context, ids []uuid.UUID) ([]
 		var t Task
 		err := rows.Scan(
 			&t.ID, &t.GoalId, &t.PhaseId, &t.Title, &t.Description,
-			&t.Status, &t.EstimatedTime, &t.CreatedAt, &t.UpdatedAt,
+			&t.Status, &t.EstimatedTime, &t.TimeSpent, &t.CreatedAt, &t.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
@@ -458,7 +461,7 @@ func (r *repositoryImpl) ListTasksByUserAndDate(
 
 	query := `
 SELECT t.id, t.goal_id, t.phase_id, t.title, t.description, 
-       t.status, t.estimated_time, t.created_at, t.updated_at
+       t.status, t.estimated_time, t.time_spent, t.created_at, t.updated_at
 FROM tasks t
 JOIN goals g       ON g.id = t.goal_id  
 JOIN scheduled_task st ON st.task_id = t.id
@@ -482,7 +485,7 @@ ORDER BY st.start_time
 		var t Task
 		if err := rows.Scan(
 			&t.ID, &t.GoalId, &t.PhaseId, &t.Title, &t.Description,
-			&t.Status, &t.EstimatedTime, &t.CreatedAt, &t.UpdatedAt,
+			&t.Status, &t.EstimatedTime, &t.TimeSpent, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}

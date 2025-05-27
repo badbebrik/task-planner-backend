@@ -690,17 +690,20 @@ func (s *service) loadTasksAndGoals(
 
 func (s *service) ToggleScheduledTask(ctx context.Context, intervalID uuid.UUID, markDone bool) error {
 	newStatus := "scheduled"
+	log.Printf("[ToggleScheduledTask] interval=%s markDone=%v", intervalID, markDone)
 	if markDone {
 		newStatus = "completed"
 	}
 	if err := s.repo.UpdateScheduledTaskStatus(ctx, intervalID, newStatus); err != nil {
 		return err
 	}
+	log.Printf("[ToggleScheduledTask] interval=%s status set to %s", intervalID, newStatus)
 
 	st, err := s.repo.GetScheduledTaskByID(ctx, intervalID)
 	if err != nil {
 		return err
 	}
+	log.Printf("[ToggleScheduledTask] loaded ScheduledTask: taskID=%s date=%s start=%s end=%s", st.TaskID, st.ScheduledDate.Format("2006-01-02"), st.StartTime.Format("15:04"), st.EndTime.Format("15:04"))
 
 	totalSpent, err := s.repo.SumDoneIntervalsForTask(ctx, st.TaskID)
 	if err != nil {
@@ -714,11 +717,16 @@ func (s *service) ToggleScheduledTask(ctx context.Context, intervalID uuid.UUID,
 }
 
 func (s *service) recalcProgressCascade(ctx context.Context, taskID uuid.UUID) error {
+
+	log.Printf("[recalcProgressCascade] start for task %s", taskID)
 	t, err := s.goalRepo.GetTaskByID(ctx, taskID)
 	if err != nil {
 		return err
 	}
+
+	log.Printf("[recalcProgressCascade] before: TimeSpent=%d EstimatedTime=%d Status=%s", t.TimeSpent, t.EstimatedTime, t.Status)
 	progress := t.CalculateProgress()
+	log.Printf("[recalcProgressCascade] computed progress=%d%%", progress)
 	switch progress {
 	case 0:
 		t.Status = "todo"
@@ -756,6 +764,7 @@ func (s *service) recalcProgressCascade(ctx context.Context, taskID uuid.UUID) e
 			return err
 		}
 	}
+	log.Printf("[recalcProgressCascade] after: Status=%s", t.Status)
 
 	g, err := s.goalRepo.GetGoalByID(ctx, t.GoalId)
 	if err != nil {
@@ -763,8 +772,6 @@ func (s *service) recalcProgressCascade(ctx context.Context, taskID uuid.UUID) e
 	}
 	g.Progress = g.CalculateProgress(allTasks)
 	switch {
-	case g.Progress == 0:
-		g.Status = "planning"
 	case g.Progress == 100:
 		g.Status = "completed"
 	default:

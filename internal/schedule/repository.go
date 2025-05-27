@@ -449,10 +449,12 @@ func (r repositoryImpl) SumDoneIntervalsForTask(
 	q := `SELECT COALESCE(
 	          SUM( EXTRACT(EPOCH FROM (end_time - start_time))), 0)
 	      FROM scheduled_task
-	      WHERE task_id = $1 AND status = 'done'`
-	var min int
-	if err := r.db.QueryRowContext(ctx, q, taskID).Scan(&min); err != nil {
+	      WHERE task_id = $1 AND status = 'completed'`
+	var seconds float64
+	if err := r.db.QueryRowContext(ctx, q, taskID).Scan(&seconds); err != nil {
 		return 0, err
 	}
-	return min, nil
+	minutes := int(seconds / 60)
+	log.Printf("[SumDoneIntervals] task=%s minutes=%d", taskID, minutes)
+	return minutes, nil
 }
