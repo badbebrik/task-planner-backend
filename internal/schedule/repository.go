@@ -27,7 +27,7 @@ type Repository interface {
 	ListScheduledTasksForGoalInRange(ctx context.Context, goalID uuid.UUID, startDate, endDate time.Time) ([]ScheduledTask, error)
 
 	// todo: дополнить для статы или выкинуть нафиг
-	CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]struct{ Completed, Total int }, error)
+	CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]DayCounters, error)
 
 	UpdateScheduledTaskStatus(ctx context.Context, id uuid.UUID, newStatus string) error
 	GetScheduledTaskByID(ctx context.Context, id uuid.UUID) (*ScheduledTask, error)
@@ -312,18 +312,27 @@ LIMIT %d
 	return result, nil
 }
 
-func (r repositoryImpl) CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]struct{ Completed, Total int }, error) {
-	query := `
+func (r *repositoryImpl) CountTasksByDay(
+	ctx context.Context,
+	startDate, endDate time.Time,
+) (map[time.Time]DayCounters, error) {
+	log.Printf("[CountTasksByDay] Params: start=%s, end=%s",
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"))
+
+	const query = `
 SELECT 
     scheduled_date,
-    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-    COUNT(*) as total
+    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)   AS completed,
+    SUM(CASE WHEN status != 'completed' THEN 1 ELSE 0 END) AS pending
 FROM scheduled_task
 WHERE scheduled_date >= $1
   AND scheduled_date <= $2
 GROUP BY scheduled_date
 `
-	rows, err := r.db.QueryContext(ctx, query,
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
 		startDate.Format("2006-01-02"),
 		endDate.Format("2006-01-02"),
 	)
@@ -332,18 +341,27 @@ GROUP BY scheduled_date
 	}
 	defer rows.Close()
 
-	result := make(map[time.Time]struct{ Completed, Total int })
+	result := make(map[time.Time]DayCounters)
 	for rows.Next() {
-		var dateStr string
-		var completed, total int
-		if err := rows.Scan(&dateStr, &completed, &total); err != nil {
+		var dt time.Time
+		var completed, pending int
+		if err := rows.Scan(&dt, &completed, &pending); err != nil {
+			log.Printf("[CountTasksByDay] Scan error: %v", err)
 			return nil, err
 		}
-		dt, _ := time.Parse("2006-01-02", dateStr)
-		result[dt] = struct{ Completed, Total int }{
-			Completed: completed,
-			Total:     total,
-		}
+		log.Printf("[CountTasksByDay] raw dt=%v, completed=%d, pending=%d", dt, completed, pending)
+
+		day := time.Date(dt.Year(), dt.Month(), dt.Day(),
+			+0, 0, 0, 0, time.UTC)
+		result[day] = DayCounters{Completed: completed, Pending: pending}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	log.Printf("[CountTasksByDay] result keys:")
+	for k, v := range result {
+		log.Printf("   %v → %+v", k, v)
 	}
 	return result, nil
 }

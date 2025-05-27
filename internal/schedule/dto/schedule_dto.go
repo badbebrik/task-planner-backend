@@ -37,11 +37,6 @@ type UpcomingTaskDTO struct {
 	StartTime     string    `json:"start_time"`
 }
 
-type GetStatsResponse struct {
-	WeeklyProgress []DayProgress `json:"weekly_progress"`
-	Goals          []GoalStat    `json:"goals"`
-}
-
 type DayProgress struct {
 	Day       string `json:"day"`
 	Completed int    `json:"completed"`

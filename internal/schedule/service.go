@@ -602,42 +602,30 @@ func (s *service) GetUpcomingTasks(ctx context.Context, limit int) (*dto.GetUpco
 }
 
 func (s *service) GetStats(ctx context.Context) (*dto.GetStatsResponse, error) {
-	today := dateOnly(time.Now())
-	startDate := today.AddDate(0, 0, -6)
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	weekStart := today.AddDate(0, 0, -6)
 
-	dayMap, err := s.repo.CountTasksByDay(ctx, startDate, today)
+	raw, err := s.repo.CountTasksByDay(ctx, weekStart, today)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count tasks by day: %w", err)
+		return nil, err
 	}
 
-	var weekly []dto.DayProgress
-	for d := startDate; !d.After(today); d = d.AddDate(0, 0, 1) {
-		data, ok := dayMap[d]
-		wdayStr := d.Weekday().String()[:3]
-		if !ok {
-			weekly = append(weekly, dto.DayProgress{
-				Day:       wdayStr,
-				Completed: 0,
-				Total:     0,
-			})
-			continue
-		}
-		weekly = append(weekly, dto.DayProgress{
-			Day:       wdayStr,
-			Completed: data.Completed,
-			Total:     data.Total,
+	var ds []dto.DayStat
+	for d := weekStart; !d.After(today); d = d.AddDate(0, 0, 1) {
+		c := raw[d]
+		ds = append(ds, dto.DayStat{
+			Date:      d.Format("2006-01-02"),
+			Completed: c.Completed,
+			Pending:   c.Pending,
 		})
 	}
 
-	goals := []dto.GoalStat{
-		{Title: "Выучить испанский", Progress: 35},
-		{Title: "Написать приложение", Progress: 10},
+	log.Printf("[GetStats] assembling week stats from %s to %s:", weekStart.Format("2006-01-02"), today.Format("2006-01-02"))
+	for _, day := range ds {
+		log.Printf("    %s → completed=%d, pending=%d", day.Date, day.Completed, day.Pending)
 	}
 
-	return &dto.GetStatsResponse{
-		WeeklyProgress: weekly,
-		Goals:          goals,
-	}, nil
+	return &dto.GetStatsResponse{Week: ds}, nil
 }
 
 func (s *service) loadTasksAndGoals(
