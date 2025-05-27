@@ -47,3 +47,12 @@ type GoalStat struct {
 	Title    string `json:"title"`
 	Progress int    `json:"progress"`
 }
+
+type AutoScheduleResponse struct {
+	Message        string `json:"message"`
+	ScheduledTasks int    `json:"scheduled_tasks"`
+}
+
+type ToggleTaskRequest struct {
+	Done bool `json:"done"`
+}

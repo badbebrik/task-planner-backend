@@ -1,0 +1,1053 @@
+basePath: /api/
+definitions:
+  create.CreateGoalRequest:
+    properties:
+      description:
+        type: string
+      estimated_time:
+        type: integer
+      hours_per_week:
+        minimum: 1
+        type: integer
+      phases:
+        items:
+          $ref: '#/definitions/create.CreatePhaseRequest'
+        type: array
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - hours_per_week
+    - title
+    type: object
+  create.CreateGoalResponse:
+    properties:
+      goal:
+        $ref: '#/definitions/dto.GoalResponse'
+    type: object
+  create.CreatePhaseRequest:
+    properties:
+      description:
+        type: string
+      estimatedTime:
+        type: integer
+      order:
+        type: integer
+      tasks:
+        items:
+          $ref: '#/definitions/create.CreateTaskRequest'
+        type: array
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - title
+    type: object
+  create.CreateTaskRequest:
+    properties:
+      description:
+        type: string
+      estimated_time:
+        type: integer
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - title
+    type: object
+  dto.AutoScheduleResponse:
+    properties:
+      message:
+        type: string
+      scheduled_tasks:
+        type: integer
+    type: object
+  dto.DayAvailability:
+    properties:
+      day_of_week:
+        type: integer
+      slots:
+        items:
+          $ref: '#/definitions/dto.TimeSlotDTO'
+        type: array
+    type: object
+  dto.DaySchedule:
+    properties:
+      date:
+        type: string
+      tasks:
+        items:
+          $ref: '#/definitions/dto.ScheduledTaskDTO'
+        type: array
+    type: object
+  dto.DayStat:
+    properties:
+      completed:
+        type: integer
+      date:
+        type: string
+      pending:
+        type: integer
+    type: object
+  dto.GetScheduleForDayResponse:
+    properties:
+      date:
+        type: string
+      tasks:
+        items:
+          $ref: '#/definitions/dto.ScheduledTaskDTO'
+        type: array
+    type: object
+  dto.GetScheduleRangeResponse:
+    properties:
+      schedule:
+        items:
+          $ref: '#/definitions/dto.DaySchedule'
+        type: array
+    type: object
+  dto.GetStatsResponse:
+    properties:
+      week:
+        items:
+          $ref: '#/definitions/dto.DayStat'
+        type: array
+    type: object
+  dto.GetUpcomingTasksResponse:
+    properties:
+      tasks:
+        items:
+          $ref: '#/definitions/dto.UpcomingTaskDTO'
+        type: array
+    type: object
+  dto.GoalResponse:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      estimated_time:
+        type: integer
+      hours_per_week:
+        type: integer
+      id:
+        type: string
+      phases:
+        items:
+          $ref: '#/definitions/dto.PhaseResponse'
+        type: array
+      progress:
+        type: integer
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  dto.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserResponse'
+    type: object
+  dto.LogoutRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  dto.PhaseResponse:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      goal_id:
+        type: string
+      id:
+        type: string
+      order:
+        type: integer
+      progress:
+        type: integer
+      status:
+        type: string
+      tasks:
+        items:
+          $ref: '#/definitions/dto.TaskResponse'
+        type: array
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  dto.RefreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  dto.RefreshResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  dto.ScheduledTaskDTO:
+    properties:
+      end_time:
+        type: string
+      goal_title:
+        type: string
+      id:
+        type: string
+      start_time:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.SendVerificationCode:
+    properties:
+      email:
+        type: string
+    type: object
+  dto.SignupRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.TaskResponse:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      estimated_time:
+        type: integer
+      goal_id:
+        type: string
+      id:
+        type: string
+      phase_id:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  dto.TimeSlotDTO:
+    properties:
+      end_time:
+        type: string
+      start_time:
+        type: string
+    type: object
+  dto.ToggleTaskRequest:
+    properties:
+      done:
+        type: boolean
+    type: object
+  dto.UpcomingTaskDTO:
+    properties:
+      goal_title:
+        type: string
+      id:
+        type: string
+      scheduled_date:
+        type: string
+      start_time:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.UpdateAvailabilityRequest:
+    properties:
+      days:
+        items:
+          $ref: '#/definitions/dto.DayAvailability'
+        type: array
+    type: object
+  dto.UpdateAvailabilityResponse:
+    properties:
+      scheduled_tasks:
+        type: integer
+    type: object
+  dto.UserResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  dto.VerifyEmailRequest:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
+    type: object
+  dto.VerifyEmailResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserResponse'
+    type: object
+  generate.GenerateGoalRequest:
+    properties:
+      description:
+        type: string
+      hours_per_week:
+        minimum: 1
+        type: integer
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - hours_per_week
+    - title
+    type: object
+  generate.GenerateGoalResponse:
+    properties:
+      generated_goal:
+        $ref: '#/definitions/generate.GeneratedGoalPreview'
+    type: object
+  generate.GeneratedGoalPreview:
+    properties:
+      description:
+        type: string
+      estimated_time:
+        type: integer
+      hours_per_week:
+        type: integer
+      phases:
+        items:
+          $ref: '#/definitions/generate.GeneratedPhaseDraft'
+        type: array
+      title:
+        type: string
+    type: object
+  generate.GeneratedPhaseDraft:
+    properties:
+      description:
+        type: string
+      estimatedTime:
+        type: integer
+      order:
+        type: integer
+      tasks:
+        items:
+          $ref: '#/definitions/generate.GeneratedTaskDraft'
+        type: array
+      title:
+        type: string
+    type: object
+  generate.GeneratedTaskDraft:
+    properties:
+      description:
+        type: string
+      estimated_time:
+        type: integer
+      title:
+        type: string
+    type: object
+  get.ListGoalItem:
+    properties:
+      description:
+        type: string
+      hours_per_week:
+        type: integer
+      id:
+        type: string
+      next_task:
+        properties:
+          due_date:
+            type: string
+          id:
+            type: string
+          title:
+            type: string
+        type: object
+      progress:
+        type: integer
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  get.ListGoalsResponse:
+    properties:
+      goals:
+        items:
+          $ref: '#/definitions/get.ListGoalItem'
+        type: array
+      meta:
+        properties:
+          limit:
+            type: integer
+          offset:
+            type: integer
+          total:
+            type: integer
+        type: object
+    type: object
+  response.ErrorResponse:
+    properties:
+      error:
+        type: string
+      success:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API
+  title: WhatAmIToDo API
+  version: "1.0"
+paths:
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Аутентифицирует по email и паролю, возвращает JWT-токены + данные
+        пользователя
+      parameters:
+      - description: Данные для входа
+        in: body
+        name: loginRequest
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Вход пользователя
+      tags:
+      - Auth
+  /api/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Ревокирует переданный refresh-токен
+      parameters:
+      - description: Refresh-токен
+        in: body
+        name: logoutRequest
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully logged out
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Выход (logout)
+      tags:
+      - Auth
+  /api/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Обменивает refresh-токен на новую пару access/refresh
+      parameters:
+      - description: Refresh-токен
+        in: body
+        name: refreshRequest
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RefreshResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Обновление токенов
+      tags:
+      - Auth
+  /api/auth/send-code:
+    post:
+      consumes:
+      - application/json
+      description: Отправляет новый код подтверждения на email пользователя
+      parameters:
+      - description: Email пользователя
+        in: body
+        name: sendVerificationCode
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendVerificationCode'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verification code sent
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Повторная отправка кода верификации
+      tags:
+      - Auth
+  /api/auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Регистрирует нового пользователя и отправляет код верификации на
+        email
+      parameters:
+      - description: Данные регистрации
+        in: body
+        name: signupRequest
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SignupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Account successfully created
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Регистрация пользователя
+      tags:
+      - Auth
+  /api/auth/verify-email:
+    post:
+      consumes:
+      - application/json
+      description: Проверяет код подтверждения и возвращает JWT-токены + данные пользователя
+      parameters:
+      - description: Email и код верификации
+        in: body
+        name: verifyEmailRequest
+        required: true
+        schema:
+          $ref: '#/definitions/dto.VerifyEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.VerifyEmailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Подтверждение email
+      tags:
+      - Auth
+  /api/availability/{goal_id}:
+    get:
+      description: Возвращает интервалы доступности для указанной цели
+      parameters:
+      - description: UUID цели
+        in: path
+        name: goal_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Данные доступности
+          schema:
+            $ref: '#/definitions/dto.UpdateAvailabilityRequest'
+        "400":
+          description: Invalid goal_id
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Получить доступность по цели
+      tags:
+      - Schedule
+    post:
+      consumes:
+      - application/json
+      description: Устанавливает интервалы доступного времени для задач указанной
+        цели и запускает авторасписание
+      parameters:
+      - description: UUID цели
+        in: path
+        name: goal_id
+        required: true
+        type: string
+      - description: Данные доступности
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateAvailabilityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Количество запланированных задач
+          schema:
+            $ref: '#/definitions/dto.UpdateAvailabilityResponse'
+        "400":
+          description: Invalid goal_id or JSON
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Создать или обновить доступность по цели
+      tags:
+      - Schedule
+  /api/availability/{goal_id}/schedule:
+    post:
+      description: Автоматически планирует "todo"-задачи указанной цели в доступные
+        интервалы
+      parameters:
+      - description: UUID цели
+        in: path
+        name: goal_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Сообщение и число запланированных задач
+          schema:
+            $ref: '#/definitions/dto.AutoScheduleResponse'
+        "400":
+          description: Invalid goal_id
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Авторасписание задач по цели
+      tags:
+      - Schedule
+  /api/goals:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает постраничный список целей пользователя с фильтром по
+        статусу
+      parameters:
+      - description: Фильтр по статусу (planning,in_progress,completed)
+        in: query
+        name: status
+        type: string
+      - default: 10
+        description: Максимальное число элементов
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Смещение для пагинации
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/get.ListGoalsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Список целей
+      tags:
+      - Goal
+    post:
+      consumes:
+      - application/json
+      description: Сохраняет новую цель вместе с фазами и задачами в базе
+      parameters:
+      - description: Данные новой цели
+        in: body
+        name: CreateGoalRequest
+        required: true
+        schema:
+          $ref: '#/definitions/create.CreateGoalRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/create.CreateGoalResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Создание цели
+      tags:
+      - Goal
+  /api/goals/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Удаляет цель по ID
+      parameters:
+      - description: UUID цели
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Invalid goal ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Удалить цель
+      tags:
+      - Goal
+    get:
+      consumes:
+      - application/json
+      description: Возвращает подробную информацию о цели, включая фазы и задачи
+      parameters:
+      - description: UUID цели
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Подробная информация о цели
+          schema:
+            $ref: '#/definitions/dto.GoalResponse'
+        "400":
+          description: Invalid goal ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Goal not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Получить цель по ID
+      tags:
+      - Goal
+  /api/goals/generate:
+    post:
+      consumes:
+      - application/json
+      description: Создаёт рекомендуемую декомпозицию цели на фазы и задачи через
+        LLM
+      parameters:
+      - description: Данные для генерации цели
+        in: body
+        name: GenerateGoalRequest
+        required: true
+        schema:
+          $ref: '#/definitions/generate.GenerateGoalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/generate.GenerateGoalResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to generate goal
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Генерация разбивки цели
+      tags:
+      - Goal
+  /api/motivation/today:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает текст мотивации для текущего пользователя
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{\"motivation\": \"...\"}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Получить мотивацию на сегодня
+      tags:
+      - Motivation
+  /api/schedule:
+    get:
+      description: Возвращает запланированные задачи за день или диапазон дат
+      parameters:
+      - description: Конкретный день YYYY-MM-DD
+        in: query
+        name: date
+        type: string
+      - description: Начало диапазона YYYY-MM-DD
+        in: query
+        name: start_date
+        type: string
+      - description: Конец диапазона YYYY-MM-DD
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Расписание за диапазон
+          schema:
+            $ref: '#/definitions/dto.GetScheduleRangeResponse'
+        "400":
+          description: Missing or invalid date parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Получить расписание
+      tags:
+      - Schedule
+  /api/scheduled_tasks/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: Переключает статус запланированной задачи (intervalID) на выполнено
+        или нет
+      parameters:
+      - description: UUID запланированного задания
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Статус задачи
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ToggleTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Invalid id or JSON
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Отметить или отменить выполнение запланированной задачи
+      tags:
+      - Schedule
+  /api/stats:
+    get:
+      description: Возвращает статистику выполненных и ожидающих задач за прошлую
+        неделю
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Статистика по дням
+          schema:
+            $ref: '#/definitions/dto.GetStatsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Получить статистику задач
+      tags:
+      - Schedule
+  /api/tasks/upcoming:
+    get:
+      description: Возвращает список ближайших запланированных задач с опциональным
+        лимитом
+      parameters:
+      - default: 5
+        description: Максимальное число задач
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список задач
+          schema:
+            $ref: '#/definitions/dto.GetUpcomingTasksResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Получить предстоящие задачи
+      tags:
+      - Schedule
+  /api/users/me:
+    get:
+      description: Возвращает данные пользователя по JWT из заголовка
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Получить информацию о текущем пользователе
+      tags:
+      - Auth
+swagger: "2.0"

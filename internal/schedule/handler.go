@@ -20,6 +20,18 @@ func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
 }
 
+// @Summary      Создать или обновить доступность по цели
+// @Description  Устанавливает интервалы доступного времени для задач указанной цели и запускает авторасписание
+// @Tags         Schedule
+// @Security     ApiKeyAuth
+// @Accept       json
+// @Produce      json
+// @Param        goal_id       path      string                                 true  "UUID цели"
+// @Param        body          body      dto.UpdateAvailabilityRequest         true  "Данные доступности"
+// @Success      200           {object}  dto.UpdateAvailabilityResponse        "Количество запланированных задач"
+// @Failure      400           {object}  response.ErrorResponse                      "Invalid goal_id or JSON"
+// @Failure      500           {object}  response.ErrorResponse                      "Internal Server Error"
+// @Router       /api/availability/{goal_id} [post]
 func (h *Handler) CreateOrUpdateAvailability(w http.ResponseWriter, r *http.Request) {
 	log.Println("[SCHEDULE] CreateOrUpdateAvailability")
 
@@ -47,6 +59,16 @@ func (h *Handler) CreateOrUpdateAvailability(w http.ResponseWriter, r *http.Requ
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// @Summary      Получить доступность по цели
+// @Description  Возвращает интервалы доступности для указанной цели
+// @Tags         Schedule
+// @Security     ApiKeyAuth
+// @Produce      json
+// @Param        goal_id   path      string                             true  "UUID цели"
+// @Success      200       {object}  dto.UpdateAvailabilityRequest     "Данные доступности"
+// @Failure      400       {object}  response.ErrorResponse                  "Invalid goal_id"
+// @Failure      500       {object}  response.ErrorResponse                  "Internal Server Error"
+// @Router       /api/availability/{goal_id} [get]
 func (h *Handler) GetAvailability(w http.ResponseWriter, r *http.Request) {
 	log.Println("[SCHEDULE] GetAvailability")
 
@@ -68,6 +90,16 @@ func (h *Handler) GetAvailability(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// @Summary      Авторасписание задач по цели
+// @Description  Автоматически планирует "todo"-задачи указанной цели в доступные интервалы
+// @Tags         Schedule
+// @Security     ApiKeyAuth
+// @Produce      json
+// @Param        goal_id   path      string  true  "UUID цели"
+// @Success      200       {object}  dto.AutoScheduleResponse   "Сообщение и число запланированных задач"
+// @Failure      400       {object}  response.ErrorResponse         "Invalid goal_id"
+// @Failure      500       {object}  response.ErrorResponse         "Internal Server Error"
+// @Router       /api/availability/{goal_id}/schedule [post]
 func (h *Handler) AutoSchedule(w http.ResponseWriter, r *http.Request) {
 	log.Println("[SCHEDULE] AutoSchedule")
 	goalIDStr := chi.URLParam(r, "goal_id")
@@ -92,6 +124,19 @@ func (h *Handler) AutoSchedule(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// @Summary      Получить расписание
+// @Description  Возвращает запланированные задачи за день или диапазон дат
+// @Tags         Schedule
+// @Security     ApiKeyAuth
+// @Produce      json
+// @Param        date        query     string  false  "Конкретный день YYYY-MM-DD"
+// @Param        start_date  query     string  false  "Начало диапазона YYYY-MM-DD"
+// @Param        end_date    query     string  false  "Конец диапазона YYYY-MM-DD"
+// @Success      200         {object}  dto.GetScheduleForDayResponse    "Расписание за день"
+// @Success      200         {object}  dto.GetScheduleRangeResponse     "Расписание за диапазон"
+// @Failure      400         {object}  response.ErrorResponse                "Missing or invalid date parameters"
+// @Failure      500         {object}  response.ErrorResponse                "Internal Server Error"
+// @Router       /api/schedule [get]
 func (h *Handler) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	dateStr := r.URL.Query().Get("date")
 	startDateStr := r.URL.Query().Get("start_date")
@@ -133,6 +178,15 @@ func (h *Handler) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Missing date or start_date/end_date", http.StatusBadRequest)
 }
 
+// @Summary      Получить предстоящие задачи
+// @Description  Возвращает список ближайших запланированных задач с опциональным лимитом
+// @Tags         Schedule
+// @Security     ApiKeyAuth
+// @Produce      json
+// @Param        limit  query     int  false  "Максимальное число задач" default(5)
+// @Success      200    {object}  dto.GetUpcomingTasksResponse     "Список задач"
+// @Failure      500    {object}  response.ErrorResponse                "Internal Server Error"
+// @Router       /api/tasks/upcoming [get]
 func (h *Handler) GetUpcomingTasks(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	limit := 5
@@ -152,6 +206,14 @@ func (h *Handler) GetUpcomingTasks(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// @Summary      Получить статистику задач
+// @Description  Возвращает статистику выполненных и ожидающих задач за прошлую неделю
+// @Tags         Schedule
+// @Security     ApiKeyAuth
+// @Produce      json
+// @Success      200  {object}  dto.GetStatsResponse   "Статистика по дням"
+// @Failure      500  {object}  response.ErrorResponse      "Internal Server Error"
+// @Router       /api/stats [get]
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.service.GetStats(r.Context())
 	if err != nil {
@@ -162,6 +224,18 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// @Summary      Отметить или отменить выполнение запланированной задачи
+// @Description  Переключает статус запланированной задачи (intervalID) на выполнено или нет
+// @Tags         Schedule
+// @Security     ApiKeyAuth
+// @Accept       json
+// @Produce      json
+// @Param        id    path      string                 true  "UUID запланированного задания"
+// @Param        body  body      dto.ToggleTaskRequest  true  "Статус задачи"
+// @Success      204   {string}  string                 "No Content"
+// @Failure      400   {object}  response.ErrorResponse      "Invalid id or JSON"
+// @Failure      500   {object}  response.ErrorResponse      "Internal Server Error"
+// @Router       /api/scheduled_tasks/{id} [patch]
 func (h *Handler) ToggleInterval(w http.ResponseWriter, r *http.Request) {
 	intervalID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
