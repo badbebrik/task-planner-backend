@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/sashabaranov/go-openai"
+	"strings"
 	"task-planner/internal/goal/dto"
 	"task-planner/internal/goal/dto/create"
 	"task-planner/internal/goal/dto/generate"
@@ -19,6 +20,8 @@ type Service interface {
 	GetGoalByID(ctx context.Context, goalID uuid.UUID) (*dto.GoalResponse, error)
 	ListGoals(ctx context.Context, userID int64, req get.ListGoalsRequest) (*get.ListGoalsResponse, error)
 	GenerateGoalDecomposition(ctx context.Context, userID int64, req generate.GenerateGoalRequest) (*generate.GenerateGoalResponse, error)
+	DeleteGoal(ctx context.Context, goalID uuid.UUID) error
+	AutoRefillTasks(ctx context.Context, goalID uuid.UUID) (int, error)
 }
 
 type service struct {
@@ -71,15 +74,16 @@ func (s *service) CreateGoal(ctx context.Context, userID int64, req create.Creat
 	for i, phaseReq := range req.Phases {
 		phaseID := uuid.New()
 		phase := &Phase{
-			ID:          phaseID,
-			GoalId:      goalID,
-			Title:       phaseReq.Title,
-			Description: phaseReq.Description,
-			Status:      "not_started",
-			Progress:    0,
-			Order:       phaseReq.Order,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			ID:            phaseID,
+			GoalId:        goalID,
+			Title:         phaseReq.Title,
+			Description:   phaseReq.Description,
+			Status:        "not_started",
+			EstimatedTime: phaseReq.EstimatedTime,
+			Progress:      0,
+			Order:         phaseReq.Order,
+			CreatedAt:     now,
+			UpdatedAt:     now,
 		}
 		if phase.Order == 0 {
 			phase.Order = i + 1
@@ -379,22 +383,8 @@ func (s *service) callOpenAIForDecomposition(title, description string, hoursPer
 	return &result.Goal, nil
 }
 
-// TODO: Переделать, щас заглушка
-func calculateGoalStatus(tasks []Task) string {
-	var total, completed int
-	for _, t := range tasks {
-		total++
-		if t.Status == "completed" {
-			completed++
-		}
-	}
-	if total == 0 {
-		return "planning"
-	}
-	if completed == total {
-		return "completed"
-	}
-	return "active"
+func (s *service) DeleteGoal(ctx context.Context, goalID uuid.UUID) error {
+	return s.repo.DeleteGoal(ctx, goalID)
 }
 
 func calculatePhaseStatus(p *Phase) string {
@@ -407,4 +397,196 @@ func calculatePhaseStatus(p *Phase) string {
 		return "completed"
 	}
 	return "in_progress"
+}
+
+func (s *service) AutoRefillTasks(ctx context.Context, goalID uuid.UUID) (int, error) {
+	phase, err := s.currentPhase(ctx, goalID)
+	if err != nil || phase == nil {
+		return 0, err
+	}
+
+	pending, _ := s.repo.CountPendingTasks(ctx, phase.ID)
+	if pending >= 3 {
+		return 0, nil
+	}
+
+	summary, err := s.generatePhaseSummary(ctx, goalID, *phase)
+	if err != nil {
+		return 0, err
+	}
+
+	newTasks, err := s.generateExtraTasks(ctx, goalID, phase, summary, 3-pending)
+	if err != nil {
+		return 0, err
+	}
+	if len(newTasks) == 0 {
+		return 0, nil
+	}
+
+	if err := insertNewTasks(ctx, s.repo, goalID, phase.ID, newTasks); err != nil {
+		return 0, err
+	}
+	return len(newTasks), nil
+}
+
+func (s *service) currentPhase(ctx context.Context, goalID uuid.UUID) (*Phase, error) {
+	phases, err := s.repo.ListPhasesByGoalID(ctx, goalID)
+	if err != nil {
+		return nil, err
+	}
+	var cur *Phase
+	for i := range phases {
+		if phases[i].Status != "completed" &&
+			(cur == nil || phases[i].Order < cur.Order) {
+			cur = &phases[i]
+		}
+	}
+	return cur, nil
+}
+
+func (s *service) generatePhaseSummary(
+	ctx context.Context, goalID uuid.UUID, ph Phase,
+) (string, error) {
+
+	since := time.Now().AddDate(0, 0, -14)
+	done, _ := s.repo.ListDoneTasksSince(ctx, ph.ID, since)
+
+	var bullets []string
+	for _, t := range done {
+		bullets = append(bullets, fmt.Sprintf("- %s (%d ч)", t.Title, t.EstimatedTime))
+	}
+
+	goalObj, _ := s.repo.GetGoalByID(ctx, goalID)
+	prompt := fmt.Sprintf(`
+Ты ведёшь дневник выполнения фазы "%s" цели "%s".
+За последние 14 дней выполнено:
+%s
+
+Опиши краткое саммари (5-7 предложений, какие навыки/темы закрыты, на что делать упор далее).
+Ответ JSON:
+{ "summary": "..." }`, ph.Title, goalObj.Title, strings.Join(bullets, "\n"))
+
+	resp, err := s.askLLM(ctx, prompt)
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Summary string `json:"summary"`
+	}
+	if err = json.Unmarshal([]byte(resp), &out); err != nil {
+		return "", err
+	}
+	return out.Summary, nil
+}
+
+func (s *service) askLLM(ctx context.Context, prompt string) (string, error) {
+	client := openai.NewClient(s.aiKey)
+	resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model:       openai.GPT4o,
+		Temperature: 0.7,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleUser, Content: prompt},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return resp.Choices[0].Message.Content, nil
+}
+
+type llmTask struct {
+	Title         string `json:"title"`
+	Description   string `json:"description,omitempty"`
+	EstimatedTime int    `json:"estimated_time"`
+}
+
+func (s *service) generateExtraTasks(
+	ctx context.Context,
+	goalID uuid.UUID,
+	ph *Phase,
+	summary string,
+	count int,
+) ([]llmTask, error) {
+
+	spent, _ := s.repo.SumTimeSpentPhase(ctx, ph.ID)
+	remaining := ph.EstimatedTime - spent
+	if remaining < 0 {
+		remaining = 0
+	}
+	goal, _ := s.repo.GetGoalByID(ctx, goalID)
+
+	prompt := fmt.Sprintf(`
+Ты – ассистент-планировщик. Пользователь работает над фазой "%s" цели "%s".
+У него осталось %d из %d запланированных часов фазы.
+Он готов уделять цели %d ч/нед.
+Последние 2 недели он сделал:
+%s
+
+Нужно создать новые конкретные задачи длиной 1-3 ч каждая, 
+чтобы продвинуть фазу дальше. Ответ строго в JSON-массиве, 
+каждый элемент:
+{ "title": "...", "description": "...", "estimated_time": 120 }
+
+Только ASCII кавычки, без комментариев.
+ВАЖНЫЕ ПРАВИЛА:
+1. Каждая задача должна быть конкретным действием, которое можно выполнить за 1-3 часа
+2. Задачи должны быть измеримыми и проверяемыми
+3. Сумма времени всех задач в фазе НЕ ДОЛЖНА превышать времени всей фазы
+4. Задачи должны быть последовательными и логически связанными
+5. Избегай слишком общих формулировок, используй конкретные действия
+6. Каждая задача должна иметь четкий результат
+
+Пример хорошей задачи:
+"Создать макеты экранов" - ПЛОХО
+"Нарисовать макет главного экрана в Figma" - ХОРОШО
+
+Пример плохой задачи:
+"Определить технологии" - ПЛОХО
+"Составить список необходимых библиотек для работы с базой данных" - ХОРОШО
+`,
+
+		ph.Title, goal.Title, remaining, ph.EstimatedTime,
+		goal.HoursPerWeek, summary)
+
+	raw, err := s.askLLM(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+	var out []llmTask
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, fmt.Errorf("bad LLM json: %w, raw: %s", err, raw)
+	}
+	if len(out) > count {
+		out = out[:count]
+	}
+	return out, nil
+}
+
+func insertNewTasks(
+	ctx context.Context,
+	repo RepositoryAggregator,
+	goalID, phaseID uuid.UUID,
+	tasks []llmTask,
+) error {
+	now := time.Now()
+	for _, it := range tasks {
+		if it.Title == "" || it.EstimatedTime <= 0 {
+			continue
+		}
+		t := &Task{
+			ID:            uuid.New(),
+			GoalId:        goalID,
+			PhaseId:       &phaseID,
+			Title:         it.Title,
+			Description:   it.Description,
+			Status:        "todo",
+			EstimatedTime: it.EstimatedTime,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+		if err := repo.CreateTask(ctx, t); err != nil {
+			return err
+		}
+	}
+	return nil
 }

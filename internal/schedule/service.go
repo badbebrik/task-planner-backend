@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"log"
 	"sort"
 	"task-planner/internal/goal"
 	"task-planner/internal/schedule/dto"
@@ -22,19 +23,20 @@ type Service interface {
 	GetScheduleRange(ctx context.Context, startDate, endDate time.Time) (*dto.GetScheduleRangeResponse, error)
 	GetUpcomingTasks(ctx context.Context, limit int) (*dto.GetUpcomingTasksResponse, error)
 	GetStats(ctx context.Context) (*dto.GetStatsResponse, error)
+	ToggleScheduledTask(ctx context.Context, intervalID uuid.UUID, markDone bool) error
 }
 
 type service struct {
-	db             *sql.DB
-	repo           Repository
-	taskRepository goal.TaskRepository
+	db       *sql.DB
+	repo     Repository
+	goalRepo goal.RepositoryAggregator
 }
 
-func NewService(db *sql.DB, repo Repository, taskRepo goal.TaskRepository) Service {
+func NewService(db *sql.DB, repo Repository, goalRepo goal.RepositoryAggregator) Service {
 	return &service{
-		db:             db,
-		repo:           repo,
-		taskRepository: taskRepo,
+		db:       db,
+		repo:     repo,
+		goalRepo: goalRepo,
 	}
 }
 
@@ -191,17 +193,19 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 		}
 	}()
 
-	tasks, err := s.taskRepository.ListTasksByGoalID(ctx, goalID)
+	tasks, err := s.goalRepo.ListTasksByGoalID(ctx, goalID)
+	log.Printf("[AutoSchedule] total tasks from repo: %d", len(tasks))
 	if err != nil {
 		return 0, fmt.Errorf("list tasks: %w", err)
 	}
 
 	var tasksToSchedule []plannedTask
 	for _, t := range tasks {
+		log.Printf("[AutoSchedule] task %s status=%q est=%d", t.ID, t.Status, t.EstimatedTime)
 		if t.Status != "todo" {
 			continue
 		}
-		toPlanMinutes := t.EstimatedTime
+		toPlanMinutes := t.EstimatedTime * 60
 		if toPlanMinutes <= 0 {
 			continue
 		}
@@ -215,10 +219,22 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 	}
 
 	avList, err := s.repo.ListAvailabilityByGoal(ctx, goalID)
+	log.Printf("[AutoSchedule] availability for goal %s: %+v", goalID, avList)
+
 	if err != nil {
 		return 0, fmt.Errorf("list availability: %w", err)
 	}
 	daySlotsMap, err := s.loadSlotsByDayOfWeek(ctx, avList)
+	for dow, slots := range daySlotsMap {
+		log.Printf("[AutoSchedule] dow=%d slotsCount=%d", dow, len(slots))
+		for _, slot := range slots {
+			log.Printf("  [Slot] id=%s start=%s end=%s",
+				slot.ID,
+				slot.StartTime.Format("15:04"),
+				slot.EndTime.Format("15:04"))
+		}
+	}
+
 	if err != nil {
 		return 0, err
 	}
@@ -231,8 +247,12 @@ func (s *service) AutoScheduleForGoal(ctx context.Context, goalID uuid.UUID) (in
 OUTER:
 	for dayOffset := 0; dayOffset < horizon; dayOffset++ {
 		currentDate := today.AddDate(0, 0, dayOffset)
-		dw := int(currentDate.Weekday())
-		slotsForDay := daySlotsMap[dw]
+		dow := int(currentDate.Weekday())
+		slotsForDay := daySlotsMap[dow]
+
+		log.Printf("[AutoSchedule] checking date %s (dow=%d), slotsForDay=%d",
+			currentDate.Format("2006-01-02"), dow, len(slotsForDay))
+
 		if len(slotsForDay) == 0 {
 			continue
 		}
@@ -241,6 +261,7 @@ OUTER:
 		})
 
 		freeIntervals, err := s.calcFreeIntervals(ctx, goalID, currentDate, slotsForDay)
+		log.Printf("[AutoSchedule][%s] freeIntervals: %+v", currentDate.Format("2006-01-02"), freeIntervals)
 		if err != nil {
 			return totalScheduled, err
 		}
@@ -316,6 +337,16 @@ OUTER:
 			freeIntervals[fiIdx] = fi
 		}
 	}
+
+	if totalScheduled > 0 {
+		g, _ := s.goalRepo.GetGoalByID(ctx, goalID)
+		if g.Status == "planning" {
+			g.Status = "active"
+			_ = s.goalRepo.UpdateGoal(ctx, g)
+		}
+	}
+
+	log.Printf("[AutoSchedule] finished, totalScheduled=%d", totalScheduled)
 
 	return totalScheduled, nil
 }
@@ -476,7 +507,7 @@ func (s *service) GetScheduleForDay(ctx context.Context, date time.Time) (*dto.G
 		return nil, fmt.Errorf("failed to load tasks/goals: %w", err)
 	}
 
-	var items []dto.ScheduledTaskDTO
+	items := make([]dto.ScheduledTaskDTO, 0)
 	for _, st := range scheduledList {
 		t := tasksMap[st.TaskID]
 		g := goalsMap[t.GoalId]
@@ -492,7 +523,7 @@ func (s *service) GetScheduleForDay(ctx context.Context, date time.Time) (*dto.G
 	}
 
 	resp := &dto.GetScheduleForDayResponse{
-		Date:  date.Format("2025-01-02"),
+		Date:  date.Format("2006-01-02"),
 		Tasks: items,
 	}
 	return resp, nil
@@ -511,7 +542,7 @@ func (s *service) GetScheduleRange(ctx context.Context, startDate, endDate time.
 
 	grouped := make(map[string][]dto.ScheduledTaskDTO)
 	for _, st := range scheduledList {
-		dateKey := st.ScheduledDate.Format("2025-01-02")
+		dateKey := st.ScheduledDate.Format("2006-01-02")
 
 		t := tasksMap[st.TaskID]
 		g := goalsMap[t.GoalId]
@@ -526,9 +557,9 @@ func (s *service) GetScheduleRange(ctx context.Context, startDate, endDate time.
 		})
 	}
 
-	var scheduleResult []dto.DaySchedule
+	scheduleResult := make([]dto.DaySchedule, 0)
 	for d := startDate; !d.After(endDate); d = d.AddDate(0, 0, 1) {
-		dateKey := d.Format("2025-01-02")
+		dateKey := d.Format("2006-01-02")
 		tasks := grouped[dateKey]
 		scheduleResult = append(scheduleResult, dto.DaySchedule{
 			Date:  dateKey,
@@ -563,7 +594,7 @@ func (s *service) GetUpcomingTasks(ctx context.Context, limit int) (*dto.GetUpco
 			ID:            st.ID,
 			GoalTitle:     g.Title,
 			Title:         t.Title,
-			ScheduledDate: st.ScheduledDate.Format("2025-01-02"),
+			ScheduledDate: st.ScheduledDate.Format("2006-01-02"),
 			StartTime:     st.StartTime.Format("15:04"),
 		})
 	}
@@ -571,42 +602,30 @@ func (s *service) GetUpcomingTasks(ctx context.Context, limit int) (*dto.GetUpco
 }
 
 func (s *service) GetStats(ctx context.Context) (*dto.GetStatsResponse, error) {
-	today := dateOnly(time.Now())
-	startDate := today.AddDate(0, 0, -6)
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	weekStart := today.AddDate(0, 0, -6)
 
-	dayMap, err := s.repo.CountTasksByDay(ctx, startDate, today)
+	raw, err := s.repo.CountTasksByDay(ctx, weekStart, today)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count tasks by day: %w", err)
+		return nil, err
 	}
 
-	var weekly []dto.DayProgress
-	for d := startDate; !d.After(today); d = d.AddDate(0, 0, 1) {
-		data, ok := dayMap[d]
-		wdayStr := d.Weekday().String()[:3]
-		if !ok {
-			weekly = append(weekly, dto.DayProgress{
-				Day:       wdayStr,
-				Completed: 0,
-				Total:     0,
-			})
-			continue
-		}
-		weekly = append(weekly, dto.DayProgress{
-			Day:       wdayStr,
-			Completed: data.Completed,
-			Total:     data.Total,
+	var ds []dto.DayStat
+	for d := weekStart; !d.After(today); d = d.AddDate(0, 0, 1) {
+		c := raw[d]
+		ds = append(ds, dto.DayStat{
+			Date:      d.Format("2006-01-02"),
+			Completed: c.Completed,
+			Pending:   c.Pending,
 		})
 	}
 
-	goals := []dto.GoalStat{
-		{Title: "Выучить испанский", Progress: 35},
-		{Title: "Написать приложение", Progress: 10},
+	log.Printf("[GetStats] assembling week stats from %s to %s:", weekStart.Format("2006-01-02"), today.Format("2006-01-02"))
+	for _, day := range ds {
+		log.Printf("    %s → completed=%d, pending=%d", day.Date, day.Completed, day.Pending)
 	}
 
-	return &dto.GetStatsResponse{
-		WeeklyProgress: weekly,
-		Goals:          goals,
-	}, nil
+	return &dto.GetStatsResponse{Week: ds}, nil
 }
 
 func (s *service) loadTasksAndGoals(
@@ -627,7 +646,7 @@ func (s *service) loadTasksAndGoals(
 		ids = append(ids, id)
 	}
 
-	tasks, err := s.taskRepository.GetTasksByIDs(ctx, ids)
+	tasks, err := s.goalRepo.GetTasksByIDs(ctx, ids)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load tasks: %w", err)
 	}
@@ -644,7 +663,7 @@ func (s *service) loadTasksAndGoals(
 		gIDs = append(gIDs, id)
 	}
 
-	goals, err := s.taskRepository.GetGoalsByIDs(ctx, gIDs)
+	goals, err := s.goalRepo.GetGoalsByIDs(ctx, gIDs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load goals: %w", err)
 	}
@@ -655,4 +674,96 @@ func (s *service) loadTasksAndGoals(
 	}
 
 	return taskMap, goalMap, nil
+}
+
+func (s *service) ToggleScheduledTask(ctx context.Context, intervalID uuid.UUID, markDone bool) error {
+	newStatus := "scheduled"
+	log.Printf("[ToggleScheduledTask] interval=%s markDone=%v", intervalID, markDone)
+	if markDone {
+		newStatus = "completed"
+	}
+	if err := s.repo.UpdateScheduledTaskStatus(ctx, intervalID, newStatus); err != nil {
+		return err
+	}
+	log.Printf("[ToggleScheduledTask] interval=%s status set to %s", intervalID, newStatus)
+
+	st, err := s.repo.GetScheduledTaskByID(ctx, intervalID)
+	if err != nil {
+		return err
+	}
+	log.Printf("[ToggleScheduledTask] loaded ScheduledTask: taskID=%s date=%s start=%s end=%s", st.TaskID, st.ScheduledDate.Format("2006-01-02"), st.StartTime.Format("15:04"), st.EndTime.Format("15:04"))
+
+	totalSpent, err := s.repo.SumDoneIntervalsForTask(ctx, st.TaskID)
+	if err != nil {
+		return err
+	}
+	if err := s.goalRepo.UpdateTaskTimeSpent(ctx, st.TaskID, totalSpent); err != nil {
+		return err
+	}
+
+	return s.recalcProgressCascade(ctx, st.TaskID)
+}
+
+func (s *service) recalcProgressCascade(ctx context.Context, taskID uuid.UUID) error {
+
+	log.Printf("[recalcProgressCascade] start for task %s", taskID)
+	t, err := s.goalRepo.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[recalcProgressCascade] before: TimeSpent=%d EstimatedTime=%d Status=%s", t.TimeSpent, t.EstimatedTime, t.Status)
+	progress := t.CalculateProgress()
+	log.Printf("[recalcProgressCascade] computed progress=%d%%", progress)
+	switch progress {
+	case 0:
+		t.Status = "todo"
+	case 100:
+		t.Status = "completed"
+	default:
+		t.Status = "in_progress"
+	}
+	if err := s.goalRepo.UpdateTask(ctx, t); err != nil {
+		return err
+	}
+
+	allTasks, err := s.goalRepo.ListTasksByGoalID(ctx, t.GoalId)
+	if err != nil {
+		return err
+	}
+
+	if t.PhaseId != nil {
+		ph, err := s.goalRepo.GetPhaseByID(ctx, *t.PhaseId)
+		if err != nil {
+			return err
+		}
+		ph.Progress = ph.CalculateProgress(allTasks)
+		switch {
+		case ph.Progress == 0:
+			ph.Status = "not_started"
+		case ph.Progress == 100:
+			ph.Status = "completed"
+			ph.MarkCompleted()
+		default:
+			ph.Status = "in_progress"
+			ph.MarkStarted()
+		}
+		if err := s.goalRepo.UpdatePhase(ctx, ph); err != nil {
+			return err
+		}
+	}
+	log.Printf("[recalcProgressCascade] after: Status=%s", t.Status)
+
+	g, err := s.goalRepo.GetGoalByID(ctx, t.GoalId)
+	if err != nil {
+		return err
+	}
+	g.Progress = g.CalculateProgress(allTasks)
+	switch {
+	case g.Progress == 100:
+		g.Status = "completed"
+	default:
+		g.Status = "active"
+	}
+	return s.goalRepo.UpdateGoal(ctx, g)
 }

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"log"
 	"time"
 )
 
@@ -25,7 +27,11 @@ type Repository interface {
 	ListScheduledTasksForGoalInRange(ctx context.Context, goalID uuid.UUID, startDate, endDate time.Time) ([]ScheduledTask, error)
 
 	// todo: дополнить для статы или выкинуть нафиг
-	CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]struct{ Completed, Total int }, error)
+	CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]DayCounters, error)
+
+	UpdateScheduledTaskStatus(ctx context.Context, id uuid.UUID, newStatus string) error
+	GetScheduledTaskByID(ctx context.Context, id uuid.UUID) (*ScheduledTask, error)
+	SumDoneIntervalsForTask(ctx context.Context, taskID uuid.UUID) (int, error)
 }
 
 type repositoryImpl struct {
@@ -38,7 +44,7 @@ func NewRepository(db *sql.DB) Repository {
 
 func (r *repositoryImpl) DeleteAvailabilityByGoal(ctx context.Context, goalID uuid.UUID) error {
 	query := `DELETE FROM availability WHERE goal_id = $1`
-	_, err := r.db.ExecContext(ctx, query)
+	_, err := r.db.ExecContext(ctx, query, goalID)
 	if err != nil {
 		return fmt.Errorf("failed to delete old availability: %w", err)
 	}
@@ -76,7 +82,7 @@ func (r repositoryImpl) ListAvailabilityByGoal(ctx context.Context, goalID uuid.
 }
 
 func (r repositoryImpl) CreateTimeSlot(ctx context.Context, slot *TimeSlot) error {
-	query := `INSERT INTO time_slot (id, availability_id, start_id, end_time, created_at, updated_at)
+	query := `INSERT INTO time_slot (id, availability_id, start_time, end_time, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 `
 	_, err := r.db.ExecContext(ctx, query,
@@ -94,14 +100,19 @@ func (r repositoryImpl) CreateTimeSlot(ctx context.Context, slot *TimeSlot) erro
 	return nil
 }
 
-func (r repositoryImpl) ListTimeSlotsByAvailabilityIDs(ctx context.Context, avIDs []uuid.UUID) ([]TimeSlot, error) {
-	if len(avIDs) == 0 {
-		return []TimeSlot{}, nil
-	}
+func (r repositoryImpl) ListTimeSlotsByAvailabilityIDs(
+	ctx context.Context, avIDs []uuid.UUID,
+) ([]TimeSlot, error) {
 
-	query := `SELECT id, availability_id, start_time, end_time, created_at FROM time_slot WHERE availability_id = ANY ($1) ORDER BY start_time
-`
-	rows, err := r.db.QueryContext(ctx, query, pqArrayUUID(avIDs))
+	const query = `
+      SELECT id, availability_id, start_time, end_time,
+             created_at, updated_at
+      FROM time_slot
+      WHERE availability_id = ANY($1)
+      ORDER BY start_time
+    `
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(avIDs))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list time_slots: %w", err)
 	}
@@ -110,35 +121,19 @@ func (r repositoryImpl) ListTimeSlotsByAvailabilityIDs(ctx context.Context, avID
 	var result []TimeSlot
 	for rows.Next() {
 		var ts TimeSlot
-		var startStr, endStr string
 		if err := rows.Scan(
 			&ts.ID,
 			&ts.AvailabilityID,
 			&ts.StartTime,
 			&ts.EndTime,
-			&startStr,
-			&endStr,
+			&ts.CreatedAt,
+			&ts.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
-
-		st, _ := time.Parse("15:04:05", startStr)
-		et, _ := time.Parse("15:04:05", endStr)
-		ts.StartTime = st
-		ts.EndTime = et
-
 		result = append(result, ts)
 	}
-
 	return result, nil
-}
-
-func pqArrayUUID(list []uuid.UUID) []string {
-	out := make([]string, 0, len(list))
-	for _, id := range list {
-		out = append(out, id.String())
-	}
-	return out
 }
 
 func (r repositoryImpl) CreateScheduledTask(ctx context.Context, st *ScheduledTask) error {
@@ -179,7 +174,7 @@ func (r repositoryImpl) ListScheduledTasksForDate(ctx context.Context, date time
 	query := `SELECT st.id, st.task_id, st.time_slot_id, st.scheduled_date, st.start_time, st.end_time, st.status, st.created_at, st.updated_at
 		FROM scheduled_task st WHERE st.scheduled_date = $1 ORDER BY st.start_time
 `
-	rows, err := r.db.QueryContext(ctx, query, date.Format("2025-01-02"))
+	rows, err := r.db.QueryContext(ctx, query, date.Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list scheduled tasks for date: %w", err)
 	}
@@ -202,7 +197,7 @@ func (r repositoryImpl) ListScheduledTasksForDate(ctx context.Context, date time
 		); err != nil {
 			return nil, err
 		}
-		sd, _ := time.Parse("2025-01-02", dateStr)
+		sd, _ := time.Parse("2006-01-02", dateStr)
 		stt, _ := time.Parse("15:04:05", stStr)
 		ett, _ := time.Parse("15:04:05", etStr)
 
@@ -230,8 +225,8 @@ WHERE st.scheduled_date >= $1
 ORDER BY st.scheduled_date, st.start_time
 `
 	rows, err := r.db.QueryContext(ctx, query,
-		startDate.Format("2025-01-02"),
-		endDate.Format("2025-01-02"),
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list scheduled tasks in range: %w", err)
@@ -241,27 +236,28 @@ ORDER BY st.scheduled_date, st.start_time
 	var result []ScheduledTask
 	for rows.Next() {
 		var st ScheduledTask
-		var dateStr, stStr, etStr string
+		var dateOnly, timeStart, timeEnd time.Time
 		if err := rows.Scan(
 			&st.ID,
 			&st.TaskID,
 			&st.TimeSlotID,
-			&dateStr,
-			&stStr,
-			&etStr,
+			&dateOnly,
+			&timeStart,
+			&timeEnd,
 			&st.Status,
 			&st.CreatedAt,
 			&st.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
-		sd, _ := time.Parse("2025-01-02", dateStr)
-		stt, _ := time.Parse("15:04:05", stStr)
-		ett, _ := time.Parse("15:04:05", etStr)
+		log.Printf("[Repo][ListScheduledTasksInRange] raw dateStr=%q, startStr=%q, endStr=%q", dateOnly, startDate, endDate)
+		//sd, _ := time.Parse("2006-01-02", dateStr)
+		//stt, _ := time.Parse("15:04:05", stStr)
+		//ett, _ := time.Parse("15:04:05", etStr)
 
-		st.ScheduledDate = sd
-		st.StartTime = combineDateTime(sd, stt)
-		st.EndTime = combineDateTime(sd, ett)
+		st.ScheduledDate = dateOnly
+		st.StartTime = combineDateTime(dateOnly, timeStart)
+		st.EndTime = combineDateTime(dateOnly, timeEnd)
 
 		result = append(result, st)
 	}
@@ -280,7 +276,7 @@ ORDER BY st.scheduled_date, st.start_time
 LIMIT %d
 `, limit)
 
-	rows, err := r.db.QueryContext(ctx, query, time.Now().Format("2025-01-02"))
+	rows, err := r.db.QueryContext(ctx, query, time.Now().Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list upcoming tasks: %w", err)
 	}
@@ -303,7 +299,7 @@ LIMIT %d
 		); err != nil {
 			return nil, err
 		}
-		sd, _ := time.Parse("2025-01-02", dateStr)
+		sd, _ := time.Parse("2006-01-02", dateStr)
 		stt, _ := time.Parse("15:04:05", stStr)
 		ett, _ := time.Parse("15:04:05", etStr)
 
@@ -316,38 +312,56 @@ LIMIT %d
 	return result, nil
 }
 
-func (r repositoryImpl) CountTasksByDay(ctx context.Context, startDate, endDate time.Time) (map[time.Time]struct{ Completed, Total int }, error) {
-	query := `
+func (r *repositoryImpl) CountTasksByDay(
+	ctx context.Context,
+	startDate, endDate time.Time,
+) (map[time.Time]DayCounters, error) {
+	log.Printf("[CountTasksByDay] Params: start=%s, end=%s",
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"))
+
+	const query = `
 SELECT 
     scheduled_date,
-    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-    COUNT(*) as total
+    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)   AS completed,
+    SUM(CASE WHEN status != 'completed' THEN 1 ELSE 0 END) AS pending
 FROM scheduled_task
 WHERE scheduled_date >= $1
   AND scheduled_date <= $2
 GROUP BY scheduled_date
 `
-	rows, err := r.db.QueryContext(ctx, query,
-		startDate.Format("2025-01-02"),
-		endDate.Format("2025-01-02"),
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count tasks by day: %w", err)
 	}
 	defer rows.Close()
 
-	result := make(map[time.Time]struct{ Completed, Total int })
+	result := make(map[time.Time]DayCounters)
 	for rows.Next() {
-		var dateStr string
-		var completed, total int
-		if err := rows.Scan(&dateStr, &completed, &total); err != nil {
+		var dt time.Time
+		var completed, pending int
+		if err := rows.Scan(&dt, &completed, &pending); err != nil {
+			log.Printf("[CountTasksByDay] Scan error: %v", err)
 			return nil, err
 		}
-		dt, _ := time.Parse("2025-01-02", dateStr)
-		result[dt] = struct{ Completed, Total int }{
-			Completed: completed,
-			Total:     total,
-		}
+		log.Printf("[CountTasksByDay] raw dt=%v, completed=%d, pending=%d", dt, completed, pending)
+
+		day := time.Date(dt.Year(), dt.Month(), dt.Day(),
+			+0, 0, 0, 0, time.UTC)
+		result[day] = DayCounters{Completed: completed, Pending: pending}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	log.Printf("[CountTasksByDay] result keys:")
+	for k, v := range result {
+		log.Printf("   %v → %+v", k, v)
 	}
 	return result, nil
 }
@@ -373,8 +387,8 @@ ORDER BY scheduled_date, start_time
 `
 	rows, err := r.db.QueryContext(ctx,
 		query,
-		startDate.Format("2025-01-02"),
-		endDate.Format("2025-01-02"),
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"),
 		goalID,
 	)
 	if err != nil {
@@ -399,7 +413,7 @@ ORDER BY scheduled_date, start_time
 			return nil, err
 		}
 
-		sd, _ := time.Parse("2025-01-02", dateStr)
+		sd, _ := time.Parse("2006-01-02", dateStr)
 		stt, _ := time.Parse("15:04:05", startStr)
 		ett, _ := time.Parse("15:04:05", endStr)
 
@@ -411,4 +425,54 @@ ORDER BY scheduled_date, start_time
 	}
 
 	return result, nil
+}
+
+func (r *repositoryImpl) UpdateScheduledTaskStatus(ctx context.Context, id uuid.UUID, newStatus string) error {
+	query := ` UPDATE scheduled_task
+			 SET status = $2, updated_at = now()
+			 WHERE id = $1;
+`
+	_, err := r.db.ExecContext(ctx, query, id, newStatus)
+	if err != nil {
+		return fmt.Errorf("failed to update scheduled tasks status: %w", err)
+	}
+	return nil
+}
+
+func (r repositoryImpl) GetScheduledTaskByID(
+	ctx context.Context, id uuid.UUID,
+) (*ScheduledTask, error) {
+	q := `SELECT id, task_id, time_slot_id,
+	      scheduled_date, start_time, end_time, status, created_at, updated_at
+	      FROM scheduled_task WHERE id = $1`
+	var st ScheduledTask
+	var dateStr, stStr, etStr string
+	if err := r.db.QueryRowContext(ctx, q, id).Scan(
+		&st.ID, &st.TaskID, &st.TimeSlotID,
+		&dateStr, &stStr, &etStr, &st.Status, &st.CreatedAt, &st.UpdatedAt); err != nil {
+		return nil, err
+	}
+	sd, _ := time.Parse("2006-01-02", dateStr)
+	stt, _ := time.Parse("15:04:05", stStr)
+	ett, _ := time.Parse("15:04:05", etStr)
+	st.ScheduledDate = sd
+	st.StartTime = combineDateTime(sd, stt)
+	st.EndTime = combineDateTime(sd, ett)
+	return &st, nil
+}
+
+func (r repositoryImpl) SumDoneIntervalsForTask(
+	ctx context.Context, taskID uuid.UUID,
+) (int, error) {
+	q := `SELECT COALESCE(
+	          SUM( EXTRACT(EPOCH FROM (end_time - start_time))), 0)
+	      FROM scheduled_task
+	      WHERE task_id = $1 AND status = 'completed'`
+	var seconds float64
+	if err := r.db.QueryRowContext(ctx, q, taskID).Scan(&seconds); err != nil {
+		return 0, err
+	}
+	minutes := int(seconds / 60)
+	log.Printf("[SumDoneIntervals] task=%s minutes=%d", taskID, minutes)
+	return minutes, nil
 }

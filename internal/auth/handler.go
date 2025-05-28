@@ -17,6 +17,15 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// @Summary      Регистрация пользователя
+// @Description  Регистрирует нового пользователя и отправляет код верификации на email
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        signupRequest  body      dto.SignupRequest  true  "Данные регистрации"
+// @Success      201            {string}  string             "Account successfully created"
+// @Failure      400            {object}  response.ErrorResponse
+// @Router       /api/auth/signup [post]
 func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	var req dto.SignupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -40,6 +49,16 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusCreated, "Account successfully created")
 }
 
+// @Summary      Подтверждение email
+// @Description  Проверяет код подтверждения и возвращает JWT-токены + данные пользователя
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        verifyEmailRequest  body      dto.VerifyEmailRequest  true  "Email и код верификации"
+// @Success      200                 {object}  dto.VerifyEmailResponse
+// @Failure      400                 {object}  response.ErrorResponse
+// @Failure      404                 {object}  response.ErrorResponse
+// @Router       /api/auth/verify-email [post]
 func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req dto.VerifyEmailRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -75,6 +94,16 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// @Summary      Вход пользователя
+// @Description  Аутентифицирует по email и паролю, возвращает JWT-токены + данные пользователя
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        loginRequest  body      dto.LoginRequest  true  "Данные для входа"
+// @Success      200           {object}  dto.LoginResponse
+// @Failure      400           {object}  response.ErrorResponse
+// @Failure      401           {object}  response.ErrorResponse
+// @Router       /api/auth/login [post]
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -107,6 +136,16 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// @Summary      Обновление токенов
+// @Description  Обменивает refresh-токен на новую пару access/refresh
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        refreshRequest  body      dto.RefreshRequest  true  "Refresh-токен"
+// @Success      200             {object}  dto.RefreshResponse
+// @Failure      400             {object}  response.ErrorResponse
+// @Failure      401             {object}  response.ErrorResponse
+// @Router       /api/auth/refresh [post]
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req dto.RefreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -130,6 +169,15 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// @Summary      Выход (logout)
+// @Description  Ревокирует переданный refresh-токен
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        logoutRequest  body      dto.LogoutRequest  true  "Refresh-токен"
+// @Success      200           {string}  string             "Successfully logged out"
+// @Failure      400           {object}  response.ErrorResponse
+// @Router       /api/auth/logout [post]
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req dto.LogoutRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -146,6 +194,16 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusOK, "Successfully logged out")
 }
 
+// @Summary      Повторная отправка кода верификации
+// @Description  Отправляет новый код подтверждения на email пользователя
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        sendVerificationCode  body      dto.SendVerificationCode  true  "Email пользователя"
+// @Success      200                   {string}  string                   "Verification code sent"
+// @Failure      400                   {object}  response.ErrorResponse
+// @Failure      404                   {object}  response.ErrorResponse
+// @Router       /api/auth/send-code [post]
 func (h *Handler) SendVerificationCode(w http.ResponseWriter, r *http.Request) {
 	var req dto.SendVerificationCode
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -172,6 +230,14 @@ func (h *Handler) SendVerificationCode(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusOK, "Verification code sent")
 }
 
+// @Summary      Получить информацию о текущем пользователе
+// @Description  Возвращает данные пользователя по JWT из заголовка
+// @Tags         Auth
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Success      200  {object}  dto.UserResponse
+// @Failure      401  {object}  response.ErrorResponse
+// @Router       /api/users/me [get]
 func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	claims, err := GetUserFromContext(r.Context())
 	if err != nil {

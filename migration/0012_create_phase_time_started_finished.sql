@@ -1,0 +1,3 @@
+ALTER TABLE phases
+    ADD COLUMN IF NOT EXISTS started_at   TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP;

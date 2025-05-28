@@ -37,11 +37,6 @@ type UpcomingTaskDTO struct {
 	StartTime     string    `json:"start_time"`
 }
 
-type GetStatsResponse struct {
-	WeeklyProgress []DayProgress `json:"weekly_progress"`
-	Goals          []GoalStat    `json:"goals"`
-}
-
 type DayProgress struct {
 	Day       string `json:"day"`
 	Completed int    `json:"completed"`
@@ -51,4 +46,13 @@ type DayProgress struct {
 type GoalStat struct {
 	Title    string `json:"title"`
 	Progress int    `json:"progress"`
+}
+
+type AutoScheduleResponse struct {
+	Message        string `json:"message"`
+	ScheduledTasks int    `json:"scheduled_tasks"`
+}
+
+type ToggleTaskRequest struct {
+	Done bool `json:"done"`
 }
